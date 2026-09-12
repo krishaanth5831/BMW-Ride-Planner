@@ -56,10 +56,12 @@ its real telemetry.
 
 ### 5. Explore — the fog map
 
-Fog-of-war over the level-14 morton squares the rider has visited.
-*"You've explored 18% of Bavaria."*
+Fog-of-war over the road network itself — which roads the rider has actually ridden.
+*"You've ridden 340 of Bavaria's 4,200 km of good motorcycling road."* Naming
+road-kilometres rather than a percentage of grid squares is both more meaningful
+and more motivating.
 
-Unexplored but **fun-dense** areas glow as targets. This is where the
+Unexplored but **fun-dense** roads glow as targets. This is where the
 New-terrain growth KPI becomes visible, and it is the most screenshot-able view
 in the app.
 
@@ -74,7 +76,7 @@ demonstrated level, their safe ceiling, and the stretch band between them:
 | Curviness | °/km of the roads they ride |
 | Gradient | steepest ridden, max altitude |
 | Conditions | which weather bands they have actually ridden in |
-| Terrain | % of the region covered (links to the fog map) |
+| Terrain | road-km ridden of the region's network (links to the fog map) |
 
 Progression over time per dimension, plus a records wall (max lean, max
 altitude, longest ride, first wet ride, most curvature in one ride).
@@ -89,7 +91,7 @@ road" and "here's a harder road, and here is why it is still a safe one".
 
 ### 7. Area metrics
 
-The crowd layer per morton square, with a switchable metric: curviness / lean /
+The crowd layer per road segment, with a switchable metric: curviness / lean /
 speed / ABS rate / traffic by time band / **accident rate per rider-km** /
 **crowd-data confidence**.
 
@@ -117,8 +119,10 @@ things carry it:
    is just the connection out of town.
 4. **The road-not-taken panel** — the fast route beside the chosen one, with the
    difference decomposed: *"14 minutes slower. 3.2× the lean changes. 340 m more
-   climb. One fewer inner-city crossing."* The sentence that wins the room,
-   because it states a trade-off honestly instead of asserting a score.
+   climb. 3 junctions instead of 11 — about 2 minutes less stopped."* The
+   junction line is a concrete, checkable claim in seconds rather than a vague
+   "fewer turns". The sentence that wins the room, because it states a trade-off
+   honestly instead of asserting a score.
 5. **The learning card** — *"18% of this ride is new ground for you: the
    Kesselberg section asks for about 8° more lean than you've ridden, in dry
    weather on a road type you know. Accident rate there is below the regional

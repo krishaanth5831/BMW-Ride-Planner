@@ -27,234 +27,383 @@ provably correct, which matters because we have to defend it on stage.
 
 ---
 
-## 2. Pipeline overview
+## 2. The unit of analysis: road segments, not a grid
+
+Everything is scored on **real road segments**. This is deliberate and it is the
+foundation for everything else.
 
 ```
-  BMW crowd lake                BMW personal trips
-  85,699 trips / 13 GB          rider A / B / C
-        │                              │
-        │ ① aggregate                  │ ⑤ profile: taste · capability · context
-        ▼                              │ ⑥ skill vector  ──►  learning
-   cells.parquet                       │
-        │                              │
-        │ ② graph: observed transitions (+ OSM topology)
-        ▼                              │
-   edges.parquet                       │
-        │                              │
-        │ ③ static enrichment          │
-        │   OSM · DEM · land cover · accident rates
-        ▼                              │
-   cells_enriched.parquet              │
-        │                              │
-        └──────────┬───────────────────┘
-                   │  ④ dynamic context: weather · live traffic
-                   ▼
-             ⑦ scoring: scenic · fun · risk · growth
-                   ▼
-             ⑧ cost function
-                   ▼
-             ⑨ Dijkstra  ──►  Destination  /  Joyride
-                   ▼
-             ⑩ explanation payload  →  UI
-                   │
-                   └──►  ride happens  ──►  skill vector updates   ⟲
+  Named road / pass          "Kesselberg (B11)"        → suggestions, UI labels
+        │
+  Road segment               junction → junction,      → THE ROUTABLE UNIT.
+    (uniform ~200 m           subdivided evenly           all four scores live here
+     chainage)
+        │
+  Corner / straight events   from the lean trace       → flow, rhythm,
+    (optional layer)                                      per-corner capability
 ```
 
-Stages ①–③ run **once, offline**. Stages ④–⑩ run **per request**, in well under
-a second. The loop back from a completed ride into the skill vector is what
-makes this a companion rather than a search engine.
+**Junctions are nodes. Segments between them are edges.** The scoring unit and
+the routing edge are the same object, so routes follow real roads — no chains of
+grid-cell centroids needing smoothing.
+
+### Why not a grid
+
+A 100 m square is not a road. It can contain a motorway and its frontage road,
+or a junction, or half a corner. Worse, **a hairpin straddling a cell boundary
+is measured as two half-corners**, each with diluted curviness — degrading the
+single best feature we have because of an arbitrary line on a map. And "flow" —
+a green flag in BMW's brief — is a property of a *sequence* of corners, which
+binning destroys outright.
+
+Segments also have **better statistics** than cells, because one road's data
+stops being split across several squares.
+
+### What morton codes are still for
+
+`morton_code` remains an excellent **spatial index** and a poor **unit of
+analysis**. Keep it for:
+
+- prefix-match "everything near here" queries (`morton_code LIKE '1220013%'`)
+- bucketing candidate segments during the snapping join, which is what makes
+  that join fast
+- coarse rider coverage
+
+It is no longer what we score.
 
 ---
 
-## 3. Stage ① — Chop the map into squares and ask the crowd
+## 3. Stage ① — Snap the crowd onto segments
 
-### Why squares
+### Building segments
 
-BMW's dataset already ships a spatial index: every telemetry row carries a
-`morton_code`, a 32-digit base-4 quadkey — effectively a postcode for a square
-on the map, with one very useful property: **nearby squares share a code
-prefix**. So:
+From the OSM extract: take road ways of rideable classes, **split them at every
+junction node** (any node where ways meet, i.e. degree ≠ 2), then **subdivide
+long segments to uniform ~200 m chainage**.
 
-- "everything near here" is a string prefix match (`morton_code LIKE '1220013%'`)
-- zooming out is *truncating the string* — no re-aggregation needed
+Uniform chainage matters. Raw junction-to-junction ways vary from 30 m stubs to
+2 km runs; a 2 km segment dilutes one great corner into an average, and a 30 m
+stub is statistical noise. Uniform length restores the comparability that made a
+grid attractive, without the arbitrary boundaries.
 
-We aggregate at **level 18 ≈ 100 m** for road-quality features, and roll up to
-**level 14 ≈ 1.6 km** for anything needing more samples per bucket.
+**Fallback with no OSM:** build the crowd-transition graph, then **collapse every
+chain of degree-2 nodes into a single polyline**. That is how routing graphs are
+built from raw networks anyway — junctions are the nodes with degree ≠ 2, and
+everything between them is one segment. You get road-following geometry with
+zero downloads. Either way, **the unit is a segment, never a square.**
 
-The encoder is written and documented in BMW's own sample viewer at
-`tripViewer/tripViewer/app.js:225`. **Port it verbatim.** It is an
-equirectangular grid — `xf = (lon+180)/360`, `yf = (lat+90)/360`, both axes
-divided by 360 — **not** Web Mercator. Rolling your own misplaces every cell.
+### Snapping — and why it is cheap here
 
-### What we compute per square
+BMW's `positionmapmatched*` coordinates are already projected onto road
+centrelines: **measured mean offset from raw GPS is 16 m, with 62% of samples
+within 5 m**. So this is a nearest-way lookup with a heading check, not
+probabilistic map-matching from noisy GPS.
 
-One pass over all 85,699 trips. Everything is a running sum, so it streams.
+They are *not* quantised to a shared node network (367k distinct coordinates out
+of 503k points in rider A's trips; the heavy repeats are parked locations, not
+nodes), so we cannot recover BMW's own road IDs — but we do not need to.
+
+Each point maps to `(segment_id, chainage)`.
+
+### Kernel attribution instead of hard binning
+
+A point is not assigned to exactly one unit. Its contribution is weighted, which
+removes every arbitrary boundary from the pipeline.
+
+**Perpendicular weight — resolves snapping ambiguity:**
+
+```
+w_snap(i, s) = exp( −d⊥(i,s)² / 2σ⊥² ) × max( 0, cos Δbearing(i,s) )
+σ⊥ ≈ 20 m       # matched to the observed 16 m offset
+```
+
+A point between a motorway and its frontage road contributes *partially to both*
+rather than being confidently wrong. The heading term does most of the
+separating work, since parallel roads are usually travelled at similar bearings
+but junction approaches are not.
+
+**Along-road weight — fixes the split-corner problem:**
+
+```
+w_along(i, x) = exp( −(chainage(i) − x)² / 2σ∥² )
+σ∥ ≈ 50–100 m
+```
+
+A corner's lean-change belongs partly to its approach and partly to its exit, so
+it is spread along the road rather than hard-cut at a chainage boundary. This is
+precisely the failure that made a grid unacceptable.
+
+**Two rules that bite if ignored:**
+
+1. **Normalise by the weight sum, not the point count** (Nadaraya–Watson):
+
+   ```
+   score(s) = Σᵢ wᵢ·xᵢ / Σᵢ wᵢ
+   ```
+
+   Otherwise segments at the edge of coverage score artificially low, and the
+   router systematically avoids roads merely for being at the boundary of the
+   data.
+
+2. **Never smooth across a junction.** A kernel that leaks lean data from one
+   road, around a corner, into a different road is simply wrong. Smooth along
+   chainage *within a road*; stop at junctions.
+
+`Σw` is itself useful: it is the **snapping confidence**, and feeds the
+confidence blend in §5.
+
+### What we compute per segment
 
 | Feature | How | Column |
 |---|---|---|
-| `path_m` | Σ haversine between consecutive points | `positionmapmatchedlat/lon` |
-| `lean_delta` | Σ \|Δlean\|, ignoring steps < 2° as sensor noise | `sensorsbankingangle` |
-| `leaned_m` | distance ridden with \|lean\| > 5° | `sensorsbankingangle` |
+| `lean_delta` | Σ \|Δlean\| per km, ignoring steps < 2° as noise | `sensorsbankingangle` |
+| `leaned_share` | share of distance ridden with \|lean\| > 5° | `sensorsbankingangle` |
 | `lean_p50`, `lean_p95` | percentiles of \|lean\| | `sensorsbankingangle` |
 | `speed_mean`, `speed_p85` | observed, **not** the speed limit | `ridingvehiclespeed` |
 | `band_share` | share of samples in 50–120 km/h | `ridingvehiclespeed` |
 | `crawl_share` | share of samples under 20 km/h | `ridingvehiclespeed` |
-| `abs_events` | ABS activation count | `ridingabsbraking` |
-| `hard_decel` | samples under −3 m/s² | `sensorsaccelerationlongitudinal` |
-| `elev_*` | elevation min / mean / max | `positionrawelevation` |
+| `abs_rate` | ABS activations per km | `ridingabsbraking` |
+| `hard_decel_rate` | samples under −3 m/s² per km | `sensorsaccelerationlongitudinal` |
+| `elev_*` | elevation profile | `positionrawelevation` + DEM |
 | `rpm_mean` | engine speed | `ridingenginespeed` |
-| `temp_mean` | ambient | `sensorsoutsidetemperature` |
-| `n_trips` | distinct rides through this square | **the filename** |
-| `speed_by_band` | median speed × weekday/weekend × 3 time bands, at level 14 | `ridingvehiclespeed` |
+| `n_trips`, `Σw` | distinct rides; snapping confidence | **the filename** |
+| `speed_by_band` | median speed × weekday/weekend × 3 time bands | `ridingvehiclespeed` |
 
 ### Curviness — the key measure, and why it is lean-based
 
-Curviness is **degrees of lean change per kilometre**:
-
 ```
-curviness = lean_delta / (path_m / 1000)
+curviness = lean_delta / km        # degrees of lean change per kilometre
 ```
 
 BMW's own definition (`app.js:188`), and cleverer than it looks. A long
 constant-radius sweeper holds a near-constant lean angle and accumulates almost
-no *change*. A proper series of corners swings left–right–left and racks up
-change fast. So this measures **the thing riders actually enjoy** — direction
-changes — rather than mere road geometry.
-
-Steps below 2° are discarded as sensor noise, or every straight accumulates a
-baseline from vibration.
+no *change*. A series of corners swings left–right–left and racks up change
+fast. So this measures **the thing riders actually enjoy** — direction changes —
+rather than mere road shape.
 
 > **This is the moat.** `sensorsbankingangle` is 100% filled in the crowd data,
-> and phones cannot measure it. Every competing planner infers curvature from
-> map geometry; we read it off the motorcycle.
+> and phones cannot measure it. Competing planners infer curvature from map
+> geometry; we read it off the motorcycle. Geometry misses camber, surface,
+> sightlines and rhythm — a blind off-camber 50 m bend looks identical to a
+> well-cambered one in OSM, and completely different in the data.
 
 ### Implementation note that will bite you
 
-The aggregation is one DuckDB query. Δlean needs a window function:
+Δlean needs a window function:
 
 ```sql
 lag(sensorsbankingangle) OVER (PARTITION BY filename ORDER BY timestampinmillis)
 ```
 
-**Partition by `filename`, never by `trip_id`.** `trip_id` is only 56% filled in
-the lake — partitioning on it drops ~44% of rows into one null partition and
-silently corrupts every Δlean across trip boundaries. Use
+**Partition by `filename`, never by `trip_id`.** `trip_id` is only 56% filled —
+partitioning on it drops ~44% of rows into one null partition and silently
+corrupts every Δlean across trip boundaries. Use
 `read_csv('.../**/*.csv', filename=true)`.
 
-### Traffic, measured instead of guessed
-
-No free keyless real-time traffic source exists, and a key provisioned the night
-before a demo is a liability. So congestion comes from **BMW's own data**:
-
-```
-congestion(cell, t) = 1 − ( speed_median(cell, band(t)) / speed_p85(cell) )
-```
-
-Bucket coarsely or it will be empty. 85,699 trips × ~310 median rows ≈ 27M
-points over ~10⁵–10⁶ level-18 squares is only a few dozen points per square;
-split across 24 h × 7 days it is mostly null. So compute the temporal prior at
-**level 14** with **weekday/weekend × 3 time bands**. Morton rollup is string
-truncation, so this is one extra `GROUP BY` in the same query.
-
-A live traffic layer can override this per request where a key is configured —
-see [DATA_SOURCES.md](DATA_SOURCES.md) §5 — but the prior is always available and
-is the default.
+Kernel attribution means aggregation is a **weighted join over a ±3σ chainage
+window**, not a plain `GROUP BY`. Still expressible in DuckDB, more expensive,
+and entirely offline — it does not touch serving latency.
 
 ---
 
-## 4. Stage ② — The road network
+## 4. Stage ② — The graph: junctions as nodes, turns as arcs
 
-**Fallback (build this first):** nodes are squares riders have actually ridden;
-edges are **observed square→square transitions** from the crowd, carrying
-observed median speed. No download, no external dependency, and it routes on
-roads riders actually ride at speeds they actually ride them.
+Junctions are where nearly everything bad for a rider concentrates:
+**standstills** (a red flag in the brief), **flow** and **clear road view** (two
+green flags), elevated **intersection risk**, and **attention** — every junction
+is a navigation decision, and on a bike checking your phone is both irritating
+and slightly dangerous.
 
-**Upgrade (once OSM is parsed):** take topology from the OSM extract — every
-road, correctly connected, with one-ways and turn restrictions — and keep the
-crowd data as the **quality layer** on top. This removes the fallback's real
-limitation: it cannot route where nobody has ridden.
+So junctions carry a real cost. Getting that cost right needs three specific
+fixes, because the naive version fails badly.
 
-Build the crowd graph first because nothing blocks it; layer OSM in when the
-extract is ready.
+### Fix 1 — a junction only costs you if you stop or turn
 
-### Two filters that are not optional
+**The trap:** "fewest junctions" is secretly a **motorway-seeking** objective. A
+motorway has almost no at-grade junctions — grade-separated interchanges, no
+signals, long uninterrupted runs. A naive count would drive every route onto the
+A95 and fight the scenic score rather than reinforcing it.
 
-**1. Drop transitions longer than ~150 m** (1.5× the level-18 cell diagonal).
+**The fix:** charge for what actually costs the rider, not for topology.
 
-If a rider's GPS drops out for 30 seconds, the data shows one "transition"
-spanning two to five kilometres. Dijkstra will find it and love it — a free
-shortcut with a plausible `time = L/v`. BMW's viewer guards against exactly this
-at `app.js:176` with `MAX_GAP_M`. Without the filter, the Munich→Kesselberg test
-can pass while the route quietly teleports.
+| Situation | Cost |
+|---|---|
+| **Turn** — you change from one road to another | attention + momentum |
+| **Control against you** — signals, stop, give-way | measured delay |
+| Flowing straight through on priority | **free** |
+| Passing a side road where you have priority | **free** |
+| Grade-separated interchange you do not leave | **free** |
 
-**2. Require ≥ 2 distinct trips per edge.**
+Now a flowing B-road with twenty side roads you sail past costs about the same
+in junction terms as a motorway — and the scenic and fun scores then correctly
+separate them, which is their job. The junction term stops competing with the
+scenic term.
 
-One rider's stray GPS sample should not create a road. This also prunes
-*parallel-road collapse* — a motorway and its frontage road can fall inside one
-100 m square, and only transitions riders actually made survive.
+### Fix 2 — do not count junctions, measure what they cost
 
-**Verify before trusting the graph:** assert no edge exceeds the threshold,
-assert every edge has ≥ 2 trips, then **render the 20 longest edges and look at
-them**. A teleport that survives into the demo is worse than a missing feature.
+**The trap:** counting forces you to invent a penalty unit and tune it against
+travel time by feel. Too small and it does nothing; too large and the router
+takes a 40 km detour to dodge three roundabouts.
+
+**The fix:** measure the delay from the crowd trips, in seconds.
+
+For each junction and each turn through it, take the crowd trips that made that
+manoeuvre and compare the time actually taken against the time it would have
+taken at approach speed:
+
+```
+delay(j, turn, band) = t_observed_through_junction
+                     − ( distance_through / v_approach )
+
+junction_cost = delay(j, turn, band) + attention_cost(turn)
+attention_cost = small fixed ≈ 5 s, only when the named road changes
+```
+
+Three things this buys:
+
+1. **It is in seconds** — automatically commensurate with travel time, so it
+   *cannot* blow up into absurd detours. Ten junctions at ~15 s each is 2.5
+   minutes; that can never justify a 40 km detour. **The unit is the bound.** No
+   tuning constant to guess.
+2. **It is measured, not tagged.** A signal that is green 90% of the time costs
+   little, and the data knows that while OSM does not.
+3. **It varies by time of day for free**, since crowd speed is already bucketed
+   by time band.
+
+**Fallback chain**, because thin data is common at turn granularity:
+
+```
+turn-specific measured delay
+  → node-aggregate measured delay
+    → tag-based prior (signals ≈ 15 s · stop ≈ 8 s · give-way ≈ 4 s · priority straight ≈ 0 s)
+      → 0
+```
+
+**Verify this is real before relying on it.** Take ~20 known junctions and check
+for a repeatable speed dip. At ~1 Hz sampling and 16 m matching error the dip may
+be smeared out; if it is, junction cost falls back to tag-based priors and the
+"measured, not tagged" claim comes off the slide.
+
+### Fix 3 — turn costs need an edge-based graph
+
+**The trap:** a *node* penalty is easy — push it onto incoming edges, everything
+stays positive, Dijkstra unchanged. But a *turn* penalty depends on the **pair**
+of edges: straight through is free, a left turn across traffic is not. A
+node-based Dijkstra cannot express that, because by the time you are at the node
+you have forgotten how you arrived.
+
+**The fix: a turn-expanded graph.** Nodes become *directed segments*; arcs
+become *permitted turns*.
+
+```
+node  := (segment, direction)
+arc   := (incoming directed segment → outgoing directed segment) at a junction
+cost(arc) = segment_cost(outgoing) + junction_cost(turn)
+```
+
+Every real router does this. Size grows to roughly `Σ(in-degree × out-degree)`
+over junctions — call it 2–4× the node count, which is nothing at Bavaria scale.
+
+Three things come free, and the third matters more than it sounds:
+
+- **one-ways**, correctly
+- **OSM turn restrictions** (`no_left_turn` relations)
+- **U-turn prevention** — which is what stops the joyride loop from doubling
+  back on itself at a dead end
+
+Do this from the start. Retrofitting turn costs onto a node-based graph is
+genuinely unpleasant.
+
+### The dropout filter still applies
+
+If a rider's GPS drops out, the data shows one "transition" spanning kilometres.
+Snapping to real segments removes most of the damage, but still: **discard
+point-to-point steps beyond ~150 m** when accumulating along-chainage features,
+and require **≥ 2 distinct trips** before trusting a segment's crowd score. BMW's
+own viewer guards the same way at `app.js:176`.
 
 ---
 
 ## 5. Stage ③ — Static enrichment, and scoring roads with no crowd data
 
-Offline, `cells.parquet` is joined against the static external sources into
-`cells_enriched.parquet`. Full detail in [DATA_SOURCES.md](DATA_SOURCES.md); the
-features that matter to the algorithm:
+Offline, segments are joined against the static external sources into
+`segments_enriched.parquet`. Full detail in
+[DATA_SOURCES.md](DATA_SOURCES.md); the features that matter here:
 
 | From | Features |
 |---|---|
-| **OSM** | `curvature_geo`, `junction_density`, `road_class`, `surface_quality`, `maxspeed`, `tunnel_share`, `viewpoint`, `water_prox`, `forest_share`, `construction` |
+| **OSM** | `curvature_geo`, `road_class`, `surface`, `maxspeed`, `tunnel`, `bridge`, `oneway`, turn restrictions, `viewpoint`, `water_prox`, `forest_share`, `construction` |
 | **Copernicus DEM** | `gradient`, `elev_gain_per_km`, `relief`, `ridge_score`, `horizon_west` |
 | **CLMS land cover** | `forest_frac`, `natural_frac`, `urban_frac`, `water_frac` |
 | **Accident data** | `accident_rate` per million rider-km, split wet / dry / dark |
 
-### The confidence blend
+Tags now attach to the segment **natively** — no spatial join from a square to a
+road, which was always an approximation.
 
-`curvature_geo` — heading change per km from OSM way geometry — measures the
-same physical property as lean-derived `curviness`, but **without needing any
-rider to have been there**. That lets us degrade gracefully instead of going
-blind:
+### Geometric curvature, and the resampling trap
+
+`curvature_geo` is computed from way geometry:
 
 ```
-c(cell)       = n_trips / (n_trips + k)             # k ≈ 5; confidence in crowd data
-quality(cell) = c · crowd_score + (1 − c) · geometry_score
+bearing(p₁,p₂) = atan2( sinΔλ·cosφ₂ , cosφ₁·sinφ₂ − sinφ₁·cosφ₂·cosΔλ )
+curvature_geo  = Σ|Δbearing| / km
+```
+
+**There is no curvature API** — nobody serves it as a field. You fetch geometry
+(Overpass `out geom;`, or a Geofabrik extract for bulk) and compute it yourself.
+
+**The trap: OSM node spacing is wildly irregular.** A straight road may have
+nodes 500 m apart; a hairpin may have forty nodes in 100 m — because a human
+traced it from aerial imagery. Differentiating per *node* means a curve
+accumulates more apparent heading change simply for being drawn in more detail,
+and your curvature score partly measures OSM mapping density.
+
+**So resample the polyline to uniform 10–20 m spacing before differentiating**,
+then smooth lightly. This is testable: artificially densify a way's nodes and
+assert curvature is unchanged.
+
+### The confidence blend
+
+`curvature_geo` measures the same physical property as lean-derived `curviness`,
+**without needing any rider to have been there**. So we degrade gracefully
+instead of going blind:
+
+```
+c(s)       = Σw(s) / (Σw(s) + k)                 # k ≈ 5 trips-equivalent
+quality(s) = c · crowd_score + (1 − c) · geometry_score
 ```
 
 A well-ridden road uses **measured lean**. An unridden road falls back to
 **geometry and terrain**. The UI surfaces `c` so a judge can see which is which.
 
 This is also the principled fix to BMW's own experimental `funFactor`
-(`app.js:203`), which multiplies by `pathKm` — so a square scores higher simply
-for *containing more road*, regardless of quality. That is an exposure count
-hiding inside a quality score. We normalise per kilometre and use trip count
-**only** as confidence, never as a fun multiplier. Say this out loud on stage:
-it is the strongest available signal that we actually read their data.
+(`app.js:203`), which multiplies by `pathKm` — so a unit scores higher simply for
+*containing more road*, regardless of quality. That is an exposure count hiding
+inside a quality score. We normalise per kilometre and use trip count **only** as
+confidence, never as a fun multiplier. Say this out loud on stage: it is the
+strongest available signal that we actually read their data.
 
 ### Accident rate must be exposure-normalised
 
-Raw accident counts would penalise exactly the roads riders love, because famous
-motorcycling roads carry far more motorcycle traffic. The crowd data gives us
-the denominator for free:
+Raw counts would penalise exactly the roads riders love, because famous
+motorcycling roads carry far more motorcycle traffic. The crowd data gives us the
+denominator for free:
 
 ```
-exposure(cell)      = n_trips(cell) × path_m(cell)          # rider-metres
-accident_rate(cell) = motorcycle_accidents(cell) / exposure(cell)
+exposure(s)      = n_trips(s) × length(s)          # rider-metres
+accident_rate(s) = motorcycle_accidents(s) / exposure(s)
 ```
 
-A road is now flagged only if it is dangerous **relative to how much it is
-ridden**. That is the difference between a statistic and an insight.
+A road is flagged only if it is dangerous **relative to how much it is ridden**.
+That is the difference between a statistic and an insight. Aggregate to the named
+road before trusting a rate — accident data is too sparse at 200 m.
 
 ---
 
 ## 6. Stage ④ — The rider profile, and the three ways it changes the route
 
-This is where "personalisation" stops being a slogan. The profile influences the
-route through **three separate channels**, and keeping them separate is what
-makes the system explainable *and* safe.
+The profile influences the route through **three separate channels**, and
+keeping them separate is what makes the system explainable *and* safe.
 
 | Channel | Question | Mechanism | Overridable? |
 |---|---|---|---|
@@ -264,7 +413,7 @@ makes the system explainable *and* safe.
 
 ### Channel 1 — Taste: revealed-preference weights
 
-Take the squares the rider has actually ridden, distance-weight them, and
+Take the segments the rider has actually ridden, distance-weight them, and
 compare each feature's mean against the crowd baseline:
 
 ```
@@ -272,9 +421,9 @@ z_R(f) = ( μ_R(f) − μ_crowd(f) ) / σ_crowd(f)      # per feature f
 w_R(f) = normalise( clip(z_R(f), 0, ∞) )           # weights, Σw = 1
 ```
 
-In words: *whatever this rider consistently over-indexes on becomes a heavier
-weight in their personal scoring.* If their rides are 1.8× curvier and 300 m
-higher than the average BMW rider, curviness and altitude dominate their weights.
+*Whatever this rider consistently over-indexes on becomes a heavier weight in
+their personal scoring.* If their rides are 1.8× curvier and 300 m higher than
+the average BMW rider, curviness and altitude dominate their weights.
 
 About thirty lines of code, no training, no black box — and the weight vector
 goes **straight onto a bar chart in the UI**. That is the whole reason to prefer
@@ -282,58 +431,57 @@ it to a fitted model: the brief promises bonus points for explainability, and a
 judge can audit this on screen in five seconds.
 
 The **Sportive / Safer / Chill** chips are priors on these weights. Personal data
-moves them away from the chosen prior; with no personal data yet, the prior is
-all you get. So a brand-new rider still gets a sensible route, and the system
-gets more personal with every ride — which is itself a slide.
+moves them away from the chosen prior; with no personal data the prior is all you
+get. So a brand-new rider still gets a sensible route, and the system gets more
+personal with every ride — which is itself a slide.
 
 ### Channel 2 — Capability: the style ratio, and why raw lean is not enough
 
-Naively, rider capability is their p95 lean angle. That is **wrong in a way that
-matters**: lean angle conflates the road with the rider. A fast rider on a
-motorway logs less lean than a cautious rider on a mountain pass. Comparing raw
-lean across riders compares the roads they happen to live near.
+Naively, capability is the rider's p95 lean angle. That is **wrong in a way that
+matters**: lean conflates the road with the rider. A fast rider on a motorway
+logs less lean than a cautious rider on a mountain pass. Comparing raw lean
+across riders compares the roads they happen to live near.
 
-The fix is to normalise by the road. For every square the rider shares with the
-crowd:
+Normalise by the road. For every segment the rider shares with the crowd:
 
 ```
-style_ratio(R) = median over shared cells (  rider_lean_p95(cell)
-                                           / crowd_lean_p95(cell)  )
+style_ratio(R) = median over shared segments (  rider_lean_p95(s)
+                                              / crowd_lean_p95(s)  )
 ```
 
 Now the number means something: **0.6 = rides well within the road's demands;
 1.2 = rides harder than the crowd on the same tarmac.** Road-normalised, and
-comparable between riders who never ride the same roads.
+comparable between riders who never ride the same roads. Segments make this
+sharper than cells did, because a segment is road-coherent.
 
-From this we derive the ceiling used for exclusions:
+The ceiling used for exclusions:
 
 ```
 lean_ceiling(R) = crowd_lean_p95 × style_ratio(R) × safety_margin
-EXCLUDE cell if crowd_lean_p95(cell) > lean_ceiling(R)
+EXCLUDE segment if crowd_lean_p95(s) > lean_ceiling(R)
 ```
 
 **Capability is a hard exclusion, not a penalty.** A soft penalty can always be
 overwhelmed by a large enough fun bonus — precisely the failure mode you cannot
 ship in a motorcycle product. An exclusion cannot be outvoted.
 
-Also derived here: speed envelope relative to `maxspeed`, and braking behaviour
-from `ridingabsbraking` + `sensorsaccelerationlongitudinal` (**not** brake
-pressure — that column is 0% filled everywhere).
+Also derived: speed envelope relative to `maxspeed`, and braking behaviour from
+`ridingabsbraking` + `sensorsaccelerationlongitudinal` (**not** brake pressure —
+that column is 0% filled everywhere).
 
 ### Channel 3 — Context
 
 - **Free-time window** — histogram of trip start times, weekday × hour, plus
-  typical duration. Seeds the time budget and drives the Overview greeting.
-  *"You usually ride Saturday 09:00–13:00 — next window is dry and 19 °C."*
+  typical duration. *"You usually ride Saturday 09:00–13:00 — next window is dry
+  and 19 °C."*
 - **Weather history** — from the Open-Meteo **archive**, every past trip
-  retroactively labelled with the conditions it happened in. Feeds the
-  conditions dimension of learning.
+  retroactively labelled with the conditions it happened in.
 - **Bike class** — inferred from rpm-per-km/h, gear count, lean envelope, tyre
-  pressure, and **confirmable by the rider in the UI**, because bike model is
-  not in the dataset.
-- **Novelty appetite** — how often they repeat roads versus ride new ones,
-  measured from their own history. Sets the default balance between *revisit a
-  favourite* and *explore something new*.
+  pressure, and **confirmable in the UI**, because bike model is not in the data.
+- **Novelty appetite** — how often they repeat roads versus ride new ones. Sets
+  the default balance between *revisit a favourite* and *explore something new*.
+- **Turn tolerance** — riders who consistently choose long uninterrupted roads
+  get a higher junction weight. Measurable from their own history.
 
 ### Three things we must not claim
 
@@ -344,8 +492,8 @@ reads as fabrication to a BMW engineer. Profiles are behavioural only.
 
 Also: `sensorsaccelerationlateral` is 70% filled on crowd data but **3% and 5%
 for two of the three example riders**. It must never enter the personal profile —
-it would pass every test against rider C and silently return nothing for two
-real riders.
+it would pass every test against rider C and silently return nothing for two real
+riders.
 
 ---
 
@@ -357,15 +505,13 @@ differentiator, so it is worth getting right.
 
 ### 7.1 The skill vector
 
-The rider's demonstrated level across five independent dimensions:
-
 | Dimension | Measure | Source |
 |---|---|---|
 | **Lean** | p90 of \|lean\|, plus `style_ratio` | `sensorsbankingangle` |
-| **Curviness** | p90 of the curviness of squares ridden | crowd aggregate ∩ their trips |
+| **Curviness** | p90 of the curviness of segments ridden | crowd ∩ their trips |
 | **Gradient** | p90 of gradient ridden, and max altitude | Copernicus DEM |
-| **Conditions** | set of weather bands ridden in (rain, cold, wind) | Open-Meteo archive |
-| **Terrain** | set of level-14 squares visited; % of region covered | morton prefixes |
+| **Conditions** | set of weather bands ridden in | Open-Meteo archive |
+| **Terrain** | **road-kilometres ridden** of the region's rideable network | segment coverage |
 
 Each dimension carries three numbers:
 
@@ -376,58 +522,55 @@ ceiling_d   = safe maximum for this rider       # from capability, never crossed
 ```
 
 `current` uses **p90 rather than max** deliberately. A single lurid lean angle
-from a near-miss or a kerb strike is not a demonstrated capability, and building
+from a near-miss or kerb strike is not a demonstrated capability, and building
 progression off a maximum would ratchet the rider upward off one bad data point.
 
-### 7.2 What makes a square a growth opportunity
+Note the Terrain dimension improves with segments: **"you've ridden 340 of
+Bavaria's 4,200 km of good motorcycling road"** is a far better statement than a
+percentage of grid squares.
 
-A square is a **stretch** on dimension `d` if its demand sits just above what the
-rider has done, and still below their ceiling:
+### 7.2 What makes a segment a growth opportunity
 
 ```
-stretch_d(cell, R) = 1   if  current_d(R) < level_d(cell) ≤ current_d(R) + Δ_d
-                     0   otherwise
+stretch_d(s, R) = 1   if  current_d(R) < level_d(s) ≤ current_d(R) + Δ_d
+                  0   otherwise
 ```
 
 Then two gates, and the second is the important one:
 
 ```
-GATE 1 (safety):   level_d(cell) ≤ ceiling_d(R)  for every dimension d
-GATE 2 (novelty):  |{ d : level_d(cell) > current_d(R) }| ≤ 1
+GATE 1 (safety):   level_d(s) ≤ ceiling_d(R)  for every dimension d
+GATE 2 (novelty):  |{ d : level_d(s) > current_d(R) }| ≤ 1
 ```
 
 **Gate 2 — one novelty at a time — is the core safety idea of the whole
-feature.** A road that is slightly curvier than usual, in familiar weather, on a
-familiar road type, is a good place to learn. A road that is curvier *and*
-steeper *and* wet is not — even though each factor individually sits inside the
-stretch band. Compound novelty is how riders get hurt, and it is exactly what a
-naive "maximise growth" objective would select for.
+feature.** A road slightly curvier than usual, in familiar weather, on a familiar
+road type, is a good place to learn. A road that is curvier *and* steeper *and*
+wet is not — even though each factor individually sits inside the stretch band.
+Compound novelty is how riders get hurt, and it is exactly what a naive
+"maximise growth" objective would select for.
 
-It also matches how skills coaching works in any physical discipline, which
-makes it easy to defend in the room.
+It also matches how skills coaching works in any physical discipline, which makes
+it easy to defend in the room.
 
 ### 7.3 The challenge dose — a route-level budget
 
-Progressive overload is not "ride at your limit all day". A learning route should
-be **mostly comfortable, with a measured dose of stretch**:
-
 ```
-dose(route) = Σ length(e) over edges where stretch(e) = 1
-              ────────────────────────────────────────────
-                        total route length
+dose(route) = Σ length(s) over segments where stretch(s) = 1
+              ──────────────────────────────────────────────
+                          total route length
 
 target dose:   Chill 5%   ·   Balanced 10–15%   ·   Sportive 20–25%
 ```
 
 This is a **route-level constraint, not an edge cost** — Dijkstra cannot express
-it directly, exactly like the time budget. Same solution: generate candidate
-routes across a range of growth weights, measure the actual dose of each, and
-return the candidate whose dose lands in the target band. Six or seven
-candidates is plenty.
+it, exactly like the time budget. Same solution: generate candidates across a
+range of growth weights, measure the actual dose of each, return the one landing
+in the target band. Six or seven candidates is plenty.
 
 Keeping the dose an explicit, displayed number is also good product design: the
 rider sees *"18% of this ride is new ground for you"* rather than trusting an
-opaque "challenge level".
+opaque challenge level.
 
 ### 7.4 Weather shrinks the ceiling — one mechanism, two problems solved
 
@@ -437,10 +580,9 @@ weather_factor  = 1.0 dry  ·  ~0.7 wet  ·  ~0.5 cold + wet  ·  0 snow/ice
 ```
 
 Because ceilings gate the stretch band, a wet forecast automatically collapses
-the growth opportunities to zero and the router falls back to comfortable roads.
-**No separate rule is needed for "don't teach someone a new lean angle in the
-rain"** — it falls out of the same arithmetic. That elegance is worth pointing
-out on stage.
+growth to zero and the router falls back to comfortable roads. **No separate rule
+is needed for "don't teach someone a new lean angle in the rain"** — it falls out
+of the same arithmetic.
 
 The accident data adds a second, independent veto: **never set a growth target on
 a road with an elevated motorcycle-accident rate**, however well it matches the
@@ -448,39 +590,33 @@ stretch band. Learning happens on safe roads.
 
 ### 7.5 The feedback loop — how learning actually closes
 
-This is what makes it a learning system rather than a recommendation:
-
-1. **Propose** — the route includes a measured dose of stretch squares.
+1. **Propose** — the route carries a measured dose of stretch segments.
 2. **Observe** — the rider rides it. New telemetry arrives.
-3. **Compare** — on the stretch squares specifically, did they ride at the
-   stretch level?
+3. **Compare** — on the stretch segments specifically:
 
 ```
-realised(cell) = rider_lean_p95_on_this_ride(cell) / crowd_lean_p95(cell)
+realised(s) = rider_lean_p95_this_ride(s) / crowd_lean_p95(s)
 
 realised ≥ style_ratio            → they met it.      current_d advances.
 realised < style_ratio × 0.85     → they backed off.  current_d holds,
                                     and the next dose is reduced.
 ```
 
-4. **Update** — recompute the skill vector, coverage set and records.
+4. **Update** — recompute the skill vector, coverage and records.
 
 The whole loop runs on telemetry alone. **We never have to ask the rider how it
 went** — the bike already told us. *"You took the Kesselberg at 0.8× your usual
-lean. We won't push that one again yet."* That sentence, delivered from data the
-rider never entered, is the demo moment that sells the thesis.
+lean. We won't push that one again yet."* That sentence, from data the rider
+never entered, is the demo moment that sells the thesis.
 
 ### 7.6 What the rider sees
 
 | Surface | Content |
 |---|---|
-| **Learnings** | Progression per dimension over time; "your next challenge" as a concrete named road, with the safety reasoning shown |
-| **Records** | New max lean, max altitude, longest ride, first wet ride, most curvature in one ride — all falling out of the skill vector |
-| **Explore (fog map)** | Level-14 squares visited vs the region; *"you've explored 18% of Bavaria"*; unexplored **fun-dense** areas glowing as targets |
-| **Route badges** | `Stretch your lean` · `New terrain` · `New conditions` on suggestion cards |
-
-The fog map is not decoration — it is the Terrain dimension of the skill vector,
-rendered. That is why it belongs in the algorithm doc and not only in the UI doc.
+| **Learnings** | Progression per dimension; "your next challenge" as a **named road**, with the gates shown |
+| **Records** | New max lean, max altitude, longest ride, first wet ride, most curvature in one ride |
+| **Explore (fog map)** | Road-kilometres ridden vs the region's network; unexplored **fun-dense** roads glowing as targets |
+| **Route badges** | `Stretch your lean` · `New terrain` · `New conditions` |
 
 ---
 
@@ -488,79 +624,108 @@ rendered. That is why it belongs in the algorithm doc and not only in the UI doc
 
 Dynamic per request: **weather** (Open-Meteo forecast, sampled along the route at
 the hour the rider will actually be there — not one value for the whole ride) and
-**live traffic** where configured, else the crowd prior.
+**live traffic** where configured, else the crowd prior:
 
-Four composite scores per square. Every input is normalised **per kilometre** and
+```
+congestion(s, t) = 1 − ( speed_median(s, band(t)) / speed_p85(s) )
+```
+
+Four composite scores. Every input is normalised **per kilometre** and
 percentile-scaled against the crowd, so all terms are comparable and
 dimensionless.
 
 | Score | Inputs |
 |---|---|
-| **Scenic** `f(t)` | curviness · `forest_frac` · `water_prox` · `viewpoint` · `relief` · `ridge_score` · `elev_gain_per_km` · −`urban_frac` · −`tunnel_share` · −motorway penalty · **sunset window** · −congestion |
-| **Fun** | curviness (crowd) blended with `curvature_geo` by confidence · `leaned_m/path_m` · `band_share` (the 50–120 km/h green flag) · `gradient` · flow as `1 − crawl_share` · −`junction_density` · `rpm_mean` |
-| **Risk** | `accident_rate` (condition-matched) · `abs_events`/km · `hard_decel`/km · `surface_quality` · `precip` · `temp < 8 °C` · `wind_gust` · `visibility` · congestion · capability gap |
+| **Scenic** `f(t)` | curviness · `forest_frac` · `water_prox` · `viewpoint` · `relief` · `ridge_score` · `elev_gain_per_km` · −`urban_frac` · −`tunnel` · −motorway penalty · **sunset window** · −congestion |
+| **Fun** | curviness (crowd) blended with `curvature_geo` by confidence · `leaned_share` · `band_share` (the 50–120 km/h green flag) · `gradient` · **flow** · `rpm_mean` |
+| **Risk** | `accident_rate` (condition-matched) · `abs_rate` · `hard_decel_rate` · `surface` · `precip` · `temp < 8 °C` · `wind_gust` · `visibility` · congestion · capability gap |
 | **Growth** | `stretch` on any dimension, subject to both gates (§7.2) |
+
+### Flow, now that it is expressible
+
+On a grid, flow was reduced to a junction count per km. On segments it becomes
+what riders actually mean:
+
+```
+flow(s) = (1 − crawl_share)
+        × uninterrupted_km_until_next_stop_or_turn
+        × corner_rhythm                              # optional layer
+```
+
+`corner_rhythm` needs the corner-event layer: detect each corner as a contiguous
+run of \|lean\| above threshold, then score the *sequence* — spacing regularity,
+left-right alternation, radius consistency. *"Nine corners in 4 km, alternating,
+radii within 20% of each other."* That is flow, and it is a sequence property a
+grid cannot represent.
+
+Corner events also sharpen capability matching: not "this road needs 45°" but
+"corner 7 of 14 needs 45°, the rest are fine". Because steady-state lean
+satisfies `tan θ = v²/(g·r)`, corner radius is estimable from telemetry alone —
+treat it as a band, not a number, since riders are not in steady state and camber
+shifts it.
 
 ### The sunset window
 
 Sun azimuth and elevation are computed locally (NOAA formula, ~20 lines, no API).
-But azimuth alone only says *where the sun is* — not whether the rider can see
-it. Sampling the DEM along that bearing gives `horizon_west`: is the view toward
-the sun actually open, or is there a mountain in the way.
-
-That turns a plausible-sounding feature into an honest one, and it is what makes
-the joyride showpiece defensible rather than decorative.
+But azimuth alone says *where the sun is*, not whether the rider can see it.
+Sampling the DEM along that bearing gives `horizon_west`: is the view toward the
+sun open, or is there a mountain in the way. That makes the joyride showpiece
+defensible rather than decorative.
 
 ---
 
 ## 9. Stage ⑧ — The cost function
 
-For each edge `e` at planned time `t`, with length `L` km and observed speed `v`:
+Per arc of the turn-expanded graph — an outgoing directed segment reached through
+one specific turn:
 
 ```
-value(e,t) = w_scenic·scenic(e,t) + w_fun·fun(e) + w_growth·growth(e,R)
-risk(e,t)  = w_acc·accident_rate + w_abs·abs_rate + w_dec·hard_decel
-             + w_wx·weather(t) + w_tr·congestion(e,t) + w_surf·surface
-time(e,t)  = L / v(e, band(t))
+value(s,t) = w_scenic·scenic(s,t) + w_fun·fun(s) + w_growth·growth(s,R)
+risk(s,t)  = w_acc·accident_rate + w_abs·abs_rate + w_dec·hard_decel
+             + w_wx·weather(t) + w_tr·congestion(s,t) + w_surf·surface
+time(s,t)  = length(s) / v(s, band(t))
 
-cost(e,t)  = time(e,t) · ( 1 + α·(1 − value(e,t)) + β·risk(e,t) )
+cost(arc) = time(s,t) · ( 1 + α·(1 − value(s,t)) + β·risk(s,t) )
+          + junction_cost(turn, band(t))              ← measured, in seconds
 
-EXCLUDE e if:  crowd_lean_p95(e) > lean_ceiling(R, t)      # capability, weather-adjusted
-               accident_rate(e) > severity_threshold        # accident outliers
-               construction or closure on e                 # OSM / live traffic
-               surface forbidden by rider options           # e.g. dirtRoads=forbid
-               snow or ice at t
+EXCLUDE arc if:  crowd_lean_p95(s) > lean_ceiling(R, t)   # capability, weather-adjusted
+                 accident_rate(s) > severity_threshold     # accident outliers
+                 construction or closure on s              # OSM / live traffic
+                 surface forbidden by rider options        # e.g. dirtRoads=forbid
+                 snow or ice at t
+                 turn not permitted                        # one-way, restriction, U-turn
 ```
 
-Four properties that matter:
+Five properties that matter:
 
-1. **Every term is positive.** `time > 0` and the multiplier is ≥ 1, so there are
-   no negative-weight edges and Dijkstra is provably correct. No Bellman-Ford, no
-   surprises.
-2. **`α` is the single user-facing dial** — the *Chill ↔ Sportive* slider,
-   literally "how much extra time will you accept for a better road".
-3. **Safety is exclusion, not penalty.** Unoutvotable by design.
-4. **Speed has a documented fallback chain:** square median → level-14 band
+1. **Every term is positive.** `time > 0`, the multiplier is ≥ 1, and
+   `junction_cost ≥ 0`. No negative-weight arcs, so Dijkstra is provably correct.
+2. **`α` is the single user-facing dial** — the *Chill ↔ Sportive* slider.
+3. **Junction cost is additive and in seconds**, not multiplied by `α`. It is a
+   real delay, not a matter of taste, so `α` must not be able to wish it away.
+   And because the unit is seconds, it is self-bounding.
+4. **Safety is exclusion, not penalty.** Unoutvotable by design.
+5. **Speed has a documented fallback chain:** segment median → named-road band
    median → regional median. Never let a missing `v` produce a divide-by-zero
    shortcut.
 
 ### A worked example
 
-Munich → Kesselberg. One 100 m hop on each candidate road, β = 1:
+Munich → Kesselberg. One 200 m segment on each candidate road, β = 1:
 
 | | A95 motorway | Kesselberg pass |
 |---|---|---|
 | Observed speed | 120 km/h | 50 km/h |
-| Real time | 3.0 s | 7.2 s |
+| Real time | 6.0 s | 14.4 s |
 | `value` | 0.10 | 0.90 |
 | `risk` | 0.05 | 0.20 |
 
 **At `α = 0`** (pure speed):
-`motorway = 3.0 × 1.05 = 3.2` vs `pass = 7.2 × 1.20 = 8.6` → **motorway wins.**
+`motorway = 6.0 × 1.05 = 6.3` vs `pass = 14.4 × 1.20 = 17.3` → **motorway wins.**
 
 **At `α = 3`** (sportive):
-`motorway = 3.0 × (1 + 3(0.90) + 0.05) = 3.0 × 3.75 = 11.3`
-`pass     = 7.2 × (1 + 3(0.10) + 0.20) = 7.2 × 1.50 = 10.8` → **the pass wins.**
+`motorway = 6.0 × (1 + 3(0.90) + 0.05) = 6.0 × 3.75 = 22.5`
+`pass     = 14.4 × (1 + 3(0.10) + 0.20) = 14.4 × 1.50 = 21.6` → **the pass wins.**
 
 Same algorithm, same data, one slider. **This inversion is the primary
 correctness test** — if it does not flip, the cost function is wrong.
@@ -571,55 +736,57 @@ correctness test** — if it does not flip, the cost function is wrong.
 
 ### Mode 1: Destination (A → B)
 
-Plain Dijkstra with a binary heap. Snap origin and destination to the nearest
-square with data.
+Dijkstra with a binary heap over the **turn-expanded** graph. Snap origin and
+destination to the nearest segment.
 
 ```
-dijkstra(graph, start, goal, cost_fn):
+dijkstra(turn_graph, start_dir_seg, goal_seg, cost_fn, t):
     dist[start] = 0;  heap = [(0, start)]
     while heap:
         d, u = pop_min(heap)
-        if u == goal: return reconstruct(u)
-        if d > dist[u]: continue               # stale entry
-        for (v, edge) in neighbours(u):
-            if excluded(edge, rider, t): continue
-            nd = d + cost_fn(edge, t)
+        if segment_of(u) == goal_seg: return reconstruct(u)
+        if d > dist[u]: continue                  # stale entry
+        for (v, turn) in permitted_turns(u):
+            if excluded(v, turn, rider, t): continue
+            nd = d + cost_fn(v, turn, t)
             if nd < dist[v]: dist[v] = nd; prev[v] = u; push(heap, (nd, v))
 ```
 
-~300k nodes and ~1M edges resolves in well under a second in pure Python, so no
-scipy dependency is required.
+Turn expansion multiplies node count by 2–4×, which is still well under a second
+in pure Python at Bavaria scale. Fewer, more meaningful edges than a grid.
 
 **Three route options** — run at three values of `α` (Chill / Balanced / Full
-Send). Genuinely different routes, not cosmetic variants, because `α` reweights
-every edge.
+Send). Genuinely different routes, because `α` reweights every arc.
 
-**Time budget** — "I have 90 minutes" is a binary search on `α`: higher `α` means
-a longer, better route, so search `α ∈ [0, α_max]` until duration lands within
-±10% of the budget. Six or seven iterations.
+**Time budget** — binary search on `α`: higher `α` means a longer, better route,
+so search `α ∈ [0, α_max]` until duration lands within ±10% of the budget.
 
 **Challenge dose** — the same candidate-and-measure loop over the growth weight
 (§7.3). Both budgets are route-level constraints resolved by generating
-candidates and measuring, never by distorting an edge cost.
+candidates and measuring, never by distorting an arc cost.
 
-Note that duration versus `α` **steps** rather than curving smoothly, because
-paths are discrete. Treat monotonicity as a smoke test only.
+Duration versus `α` **steps** rather than curving, because paths are discrete.
+Treat monotonicity as a smoke test only.
 
 ### Mode 2: Joyride (X hours from here, return home)
 
 The same Dijkstra, called four times. No second engine.
 
 1. **Flood outward** from the origin once → travel time to every reachable
-   square.
-2. **Take the ring** of squares at ≈ T/2 travel time.
-3. **Pick top-K turnarounds, spread across bearings.** Bearing diversity is what
-   makes the three offered loops look and feel genuinely different rather than
-   three variations on the same valley. Bias candidate selection toward
-   unexplored squares to serve the Terrain dimension.
-4. Route **out** on the fun-weighted cost, then **back** with a reuse penalty on
-   already-traversed edges — precisely BMW's own
+   directed segment.
+2. **Take the ring** at ≈ T/2 travel time.
+3. **Pick top-K turnarounds, spread across bearings**, so the three offered loops
+   look and feel genuinely different rather than three variations on the same
+   valley. Bias toward unridden roads to serve the Terrain dimension.
+4. Route **out** on the value-weighted cost, then **back** with a reuse penalty on
+   already-traversed segments — precisely BMW's own
    `alreadyUsedRoads="allow|forbid"` option, so we speak their vocabulary.
-5. **Rank complete loops** by value per hour; return the best three.
+5. **Rank loops** by value per hour; return the best three.
+
+Junction minimisation is strongly aligned with this mode: it naturally produces
+the *"continuous curved scenic road"* from the whiteboard notes. And U-turn
+prevention from the turn expansion is what stops a loop doubling back at a dead
+end.
 
 ### Sunset scheduling
 
@@ -629,50 +796,45 @@ golden-hour window rather than merely reporting when sunset is:
 > *"Leave at 18:10 and you'll be at the Kesselberg overlook facing west at
 > sunset."*
 
-One formula plus one DEM lookup, and the most memorable moment in the demo.
-
 ---
 
 ## 11. Stage ⑩ — How the algorithm explains itself
 
 The brief states *"explainability + live demo will score bonus points"*, and asks
-for "an overview of all used data sources and how they are weighted". So
-explanation is a first-class output, not a slide. Every route response carries
-the reasoning that produced it.
+for "an overview of all used data sources and how they are weighted". Explanation
+is a first-class output, not a slide.
 
 **1. Your profile, as a bar chart.** *"We think you like curves and altitude —
 across your 101 rides you ride 1.8× curvier roads than the average BMW rider."*
-Sourced, not asserted. Switching rider in the header re-profiles the entire
-dashboard live.
+Sourced, not asserted. Switching rider re-profiles the whole dashboard live.
 
 **2. Per-route KPI bars.** Fun, scenic, safety, growth, plus km, minutes,
-curviness in °/km, elevation gain, and % of time in the 50–120 km/h band.
+curviness in °/km, elevation gain, % of time in the 50–120 km/h band.
 
-**3. The map coloured by *why*.** Each stretch tinted by whichever KPI earned its
-place — corners here, the lake there, and this bit is just the connection out of
-town.
+**3. The map coloured by *why*.** Each segment tinted by whichever KPI earned its
+place — and because segments are real roads, this reads cleanly instead of
+blockily.
 
-**4. The road-not-taken panel.** The fast route beside the chosen one, with the
-difference decomposed:
+**4. The road-not-taken panel.** The fast route beside the chosen one:
 
-> *"14 minutes slower. 3.2× the lean changes. 340 m more climb. One fewer
-> inner-city crossing."*
+> *"14 minutes slower. 3.2× the lean changes. 340 m more climb. **3 junctions
+> instead of 11 — about 2 minutes less stopped.**"*
 
-The sentence that wins the room, because it states a **trade-off honestly**
-instead of asserting a score.
+The junction line is now a concrete, checkable claim in seconds, not a vague
+"fewer turns". That is the sentence that wins the room, because it states a
+trade-off honestly instead of asserting a score.
 
 **5. The learning card.** *"18% of this ride is new ground for you: the
 Kesselberg section asks for about 8° more lean than you've ridden, in dry weather
 on a road type you know. Accident rate there is below the regional average for
-the traffic it carries."* One dimension stretched, named; the gates shown; the
-safety evidence cited.
+the traffic it carries."*
 
-**6. Ride preview.** Predicted lean and speed gauges moving along a road the
-rider has not ridden yet.
+**6. Ride preview.** Predicted lean and speed gauges along a road the rider has
+not ridden yet.
 
-**7. Honest gaps.** Where crowd data is thin the UI shows the confidence `c` and
-says the score is geometry-derived, rather than scoring zero and quietly routing
-around a perfectly good road.
+**7. Honest gaps.** Where crowd data is thin, show the confidence `c` and say the
+score is geometry-derived — rather than scoring zero and quietly routing around a
+perfectly good road.
 
 ---
 
@@ -680,17 +842,17 @@ around a perfectly good road.
 
 | Stage | Cost | Notes |
 |---|---|---|
-| ① Aggregation | one pass over 13 GB | DuckDB, spills to disk; ~6 GB RAM free on the dev box |
+| ① Snap + kernel aggregate | one pass over 13 GB + weighted join | DuckDB, spills to disk; morton prefix buckets the snap candidates |
 | ① Output | ~30 MB Parquet | **13 GB → 30 MB.** This reduction *is* the scalability answer |
-| ② Edge build | O(points) | one pass over the aggregate |
-| ③ Enrichment | one spatial join per source | offline, cached; DEM and land-cover sampling are raster lookups |
+| ② Turn expansion | `Σ(in-deg × out-deg)` | 2–4× node growth; trivial at region scale |
+| ② Junction costs | one pass over crowd trips through each node | offline, by time band |
+| ③ Enrichment | one join per source | offline, cached; DEM/land-cover are raster lookups |
 | ④ Profile + skill vector | O(rider points) | cached per rider, invalidated on new trips |
-| ⑨ Dijkstra | O(E log V) | ~1M edges → well under a second |
-| Spatial query | prefix match | `morton_code LIKE '…%'` — no spatial index to maintain |
+| ⑨ Dijkstra | O(E log V) | well under a second |
 
-The argument generalises unchanged: cells are independent, so aggregation is
-embarrassingly parallel and shards by morton prefix. Scaling from Bavaria to all
-of Germany is more machines on the offline pass, with identical serving cost.
+Segments are independent, so aggregation is embarrassingly parallel and shards by
+morton prefix. Scaling from Bavaria to Germany is more machines on the offline
+pass, with identical serving cost.
 
 ---
 
@@ -698,24 +860,28 @@ of Germany is more machines on the offline pass, with identical serving cost.
 
 - **Coverage is Bavarian.** The crowd lake concentrates at 47.6–48.5 N,
   11.0–11.9 E. Own it: *"BMW's crowd data is Bavarian, so that's where we
-  demo."* With OSM topology and the confidence blend we can still route outside
-  it, on geometry rather than measured lean.
-- **Curviness conflates road and rider.** Mitigated by aggregating across many
-  riders, by `n_trips` confidence weighting, and by `style_ratio` on the personal
-  side — but not eliminated.
-- **Traffic is a historical prior unless a key is configured.** An accident today
-  is invisible without the live layer. A deliberate trade for demo reliability.
-- **Accident data is historical and sparse** at 100 m resolution. Aggregate to
-  level 14 before trusting a rate, and treat low-exposure squares as unknown
-  rather than safe.
-- **Sunset assumes the DEM tells the whole story.** We model terrain horizon, not
-  tree lines or buildings.
-- **The learning loop needs rides to close.** With three example riders and a
-  fixed dataset we can *demonstrate* the update arithmetic on their history, but
-  we cannot show months of progression. Be explicit that the loop is shown
-  retrospectively on real data, not simulated forward.
-- **`style_ratio` needs shared squares.** A rider with no overlap with the crowd
-  has no road-normalised ratio; fall back to the Safer prior and say so.
+  demo."* OSM topology plus the confidence blend still lets us route outside it,
+  on geometry rather than measured lean.
+- **Snapping can confuse parallel roads.** A 16 m mean offset is fine on an
+  isolated road; motorway-plus-frontage is the hard case. The heading term and
+  kernel partial-credit mitigate it. **Test on the A95 corridor specifically.**
+- **Junction delay may not be measurable.** At ~1 Hz and 16 m matching error the
+  speed dip may smear out. Falls back to tag-based priors, and then the
+  "measured, not tagged" claim comes off the slide.
+- **Curviness conflates road and rider.** Mitigated by crowd aggregation,
+  confidence weighting, and `style_ratio` on the personal side — not eliminated.
+- **Traffic is a historical prior** unless a key is configured. Today's accident
+  is invisible. A deliberate trade for demo reliability.
+- **Accident data is sparse** at segment resolution. Aggregate to the named road
+  before trusting a rate; treat low-exposure segments as unknown, not safe.
+- **Sunset assumes the DEM tells the whole story.** Terrain horizon, not tree
+  lines or buildings.
+- **The learning loop needs rides to close.** With three riders and a fixed
+  dataset we can *demonstrate* the update arithmetic on their history, but not
+  months of progression. Be explicit that it is shown retrospectively on real
+  data, not simulated forward.
+- **`style_ratio` needs shared segments.** A rider with no crowd overlap has no
+  road-normalised ratio; fall back to the Safer prior and say so.
 
 ---
 
@@ -723,21 +889,22 @@ of Germany is more machines on the offline pass, with identical serving cost.
 
 | Gate | Test |
 |---|---|
-| **Morton encoder** | Encode 1,000 raw rows; assert the first 18 base-4 digits equal that row's own `morton_code` prefix. Exact ground truth, instant. **Run before the 13 GB pass** — a wrong encoder invalidates everything |
-| Aggregation sanity | `curviness` shows a fat near-zero mode (motorways) and a right tail (passes); no square with `path_m` ≤ 50 survives; level-14 temporal buckets mostly **non-empty** |
-| Edge sanity | no edge > 150 m; every edge ≥ 2 trips; eyeball the 20 longest on a map |
+| **Curvature resampling** | Artificially densify a way's nodes; assert `curvature_geo` is **unchanged**. If it moves, you are measuring OSM mapping density |
+| **Snapping — parallel roads** | On the A95 corridor, assert motorway and frontage-road points separate. The heading term should do most of the work |
+| **Kernel normalisation** | A segment at the edge of coverage must not score systematically low — check `Σw·x/Σw`, never `Σx/n` |
+| **No kernel leak across junctions** | Inject synthetic high-lean data on one road at a junction; assert the *other* road's score does not move |
+| **Turn expansion** | One-ways respected; no U-turns in any output route; OSM `no_left_turn` relations honoured |
+| **Junction delay is real** | ~20 known junctions show a repeatable speed dip; measured delays order sensibly (signals > give-way > priority straight) |
+| **MOTORWAY TRAP REGRESSION** | Enabling junction cost must **not** increase the motorway share of generated routes. This is the guard on Fix 1 — if motorway share rises, junction cost is being charged for topology instead of for stopping and turning |
+| **Junction cost is bounded** | Total junction cost on a route stays a small share of total time; no route detours more than a few km to avoid junctions |
 | **Cost inversion** | Munich→Kesselberg takes the pass at high `α`, the A95 at `α = 0` |
-| Confidence blend | a square with `n_trips = 0` still receives a fun score, from geometry; `c` reported as ~0 |
-| Accident normalisation | a popular fun road does **not** outrank a quiet dangerous one on `accident_rate` — if it does, the exposure denominator is wrong |
-| Time budget | binary search lands within ±10% of the requested duration |
-| Challenge dose | measured dose lands in the profile's target band; `dose = 0` on a wet forecast |
-| **Gate 2 (novelty)** | construct a square that is a stretch on lean *and* gradient *and* conditions; assert it is **not** offered as growth |
-| Ceiling shrink | same request, dry vs wet forecast → wet excludes the stretch squares |
-| Safety exclusion | a synthetic low-`style_ratio` rider has the Kesselberg squares **excluded**, not merely penalised |
-| Feedback loop | replay a rider's trips chronologically; assert `current_lean` is monotone non-decreasing and never advances on a ride where `realised < style_ratio × 0.85` |
-| Profiles differ | riders A, B and C produce three different weight vectors *and* three different style ratios — if identical, the z-scoring is broken |
-| Joyride | returns to origin; legs substantially non-overlapping; three loops differ in bearing |
-
-Do not try to validate cell alignment by loading `cells.parquet` into BMW's
-tripViewer — it expects the 42-column trip schema, not an aggregate. Use the
-`morton_code` comparison above.
+| **Confidence blend** | A segment with no crowd data still receives a fun score, from geometry; `c` reported as ~0 |
+| **Accident normalisation** | A popular fun road does **not** outrank a quiet dangerous one — if it does, the exposure denominator is wrong |
+| Time budget | Binary search lands within ±10% of the requested duration |
+| Challenge dose | Measured dose lands in the profile's target band; `dose = 0` on a wet forecast |
+| **Gate 2 (novelty)** | Construct a segment that is a stretch on lean *and* gradient *and* conditions; assert it is **not** offered as growth |
+| Ceiling shrink | Same request dry vs wet → wet excludes the stretch segments |
+| Safety exclusion | A synthetic low-`style_ratio` rider has the Kesselberg segments **excluded**, not merely penalised |
+| Feedback loop | Replay a rider's trips chronologically; `current_lean` is monotone non-decreasing and never advances on a ride where `realised < style_ratio × 0.85` |
+| Profiles differ | Riders A, B, C give three different weight vectors *and* three different style ratios |
+| Joyride | Returns to origin; legs substantially non-overlapping; three loops differ in bearing; no U-turns |
