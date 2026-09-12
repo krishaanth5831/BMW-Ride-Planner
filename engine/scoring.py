@@ -1,0 +1,184 @@
+"""Scenic score and the cost function.
+
+SCENIC-ONLY MODE. The route value term is the scenic score and nothing else --
+no fun weighting, no growth, no rider taste weights. The rider profile is still
+used for two things that are not preferences:
+
+  * CAPABILITY, as a hard exclusion. Deliberately kept: a scenic road the rider
+    cannot safely ride is not a good recommendation, and a penalty could be
+    outvoted by a large enough scenic bonus.
+  * time and duration targeting.
+
+Scenic inputs (plan/ALGORITHM.md section 8):
+    curviness        lean change per ridden km, blended with road geometry
+                     by crowd confidence
+    class_scenic     road class -- a motorway is fast, safe and unscenic
+    elevation        higher is better
+    flow             1 - share of samples crawling (the "standstills" red flag)
+    band_share       share of time in the brief's 50-120 km/h green flag
+    tunnel           penalty: no view inside a tunnel
+"""
+
+from __future__ import annotations
+
+import bisect
+import datetime as dt
+
+from engine import sun
+
+# --- scenic mix (sums to 1 before the tunnel penalty) --------------------
+W_CURVE = 0.40
+W_CLASS = 0.25
+W_ELEV = 0.15
+W_FLOW = 0.12
+W_BAND = 0.08
+TUNNEL_PENALTY = 0.35
+
+# --- risk (kept as a cost multiplier; safety is not a preference) --------
+W_ABS = 0.45
+W_DECEL = 0.25
+W_CRAWL = 0.30
+W_WEATHER = 1.00
+
+# A segment needs roughly this many trips before its crowd-measured curviness is
+# trusted outright. Below it, geometry carries more of the weight.
+CONFIDENCE_K = 5.0
+
+
+class Percentiles:
+    """Percentile-scales a feature against the population of segments."""
+
+    def __init__(self, segments: list[dict], field: str):
+        vals = [float(s[field]) for s in segments if s.get(field)]
+        vals.sort()
+        self.vals = vals
+
+    def __call__(self, v) -> float:
+        if not v or not self.vals:
+            return 0.0
+        return bisect.bisect_left(self.vals, float(v)) / len(self.vals)
+
+
+class Scorer:
+    def __init__(self, segments: list[dict], profile: dict | None = None):
+        self.segments = segments
+        self.profile = profile
+        self.p = {
+            "curviness": Percentiles(segments, "curviness"),
+            "curvature_geo": Percentiles(segments, "curvature_geo"),
+            "elev_mean": Percentiles(segments, "elev_mean"),
+            "band_share": Percentiles(segments, "band_share"),
+            "abs_rate": Percentiles(segments, "abs_rate"),
+        }
+        cap = (profile or {}).get("capability") or {}
+        self.lean_p95 = float(cap.get("lean_p95") or 0.0)
+        self.style_ratio = float(cap.get("style_ratio") or 1.0)
+        self.margin = float(cap.get("margin") or 1.15)
+
+    # ------------------------------------------------------------------
+    def confidence(self, s: dict) -> float:
+        n = float(s.get("n_trips") or 0)
+        return n / (n + CONFIDENCE_K)
+
+    # ---------------------------------------------------------------- f(t)
+    def set_time(self, when: dt.datetime | None, lat: float, lon: float) -> dict:
+        """Bind the scorer to a departure time. Scenic is a function of it.
+
+        Three things genuinely move with the clock:
+          * how much light there is at all -- scenery is worth little at night
+          * golden hour, and whether a road actually points at the low sun
+          * congestion, from the crowd's own speeds in that time band
+        """
+        if when is None:
+            self._sun = None
+            return {"available": False}
+        ctx = sun.context(when, lat, lon)
+        self._sun = ctx
+        self._band = ("morning" if when.hour < 11
+                      else "midday" if when.hour < 16 else "evening")
+        return ctx
+
+    def time_factor(self, s: dict) -> tuple[float, float]:
+        """(multiplier, golden bonus) applied to the static scenic score."""
+        ctx = getattr(self, "_sun", None)
+        if not ctx:
+            return 1.0, 0.0
+        light = ctx["daylight_factor"]
+        gold = ctx["golden_hour"]
+        bonus = 0.0
+        if gold > 0:
+            facing = sun.facing_bonus(s.get("bearing_mean"), ctx["sun_azimuth_deg"])
+            # Riding toward a low sun is the money shot; riding away from it is
+            # merely pleasant. Capped so it tunes the score, never dominates it.
+            bonus = 0.30 * gold * facing
+        return light, bonus
+
+    def scenic(self, s: dict) -> float:
+        """The only value term in scenic-only mode, evaluated at the set time."""
+        c = self.confidence(s)
+        # Measured lean where riders have been; road geometry where they have
+        # not. Both are percentile-scaled so they are on the same footing.
+        curve = (c * self.p["curviness"](s.get("curviness"))
+                 + (1 - c) * self.p["curvature_geo"](s.get("curvature_geo")))
+        flow = 1.0 - float(s.get("crawl_share") or 0.0)
+        v = (W_CURVE * curve
+             + W_CLASS * float(s.get("class_scenic") or 0.5)
+             + W_ELEV * self.p["elev_mean"](s.get("elev_mean"))
+             + W_FLOW * flow
+             + W_BAND * self.p["band_share"](s.get("band_share")))
+        if s.get("tunnel"):
+            v *= (1.0 - TUNNEL_PENALTY)
+        # scenic = f(t): scale by available light, then add the golden-hour
+        # facing bonus. A road pointing west at 19:30 in September scores
+        # higher than the same road at midnight, which is the whole point.
+        light, bonus = self.time_factor(s)
+        v = v * light + bonus
+        return max(0.0, min(1.0, v))
+
+    def risk(self, s: dict, weather: float = 0.0) -> float:
+        return min(1.0,
+                   W_ABS * self.p["abs_rate"](s.get("abs_rate"))
+                   + W_DECEL * min(1.0, float(s.get("hard_decel_rate") or 0.0) / 5.0)
+                   + W_CRAWL * float(s.get("crawl_share") or 0.0)
+                   + W_WEATHER * weather)
+
+    # ------------------------------------------------------------------
+    def excluded(self, s: dict, weather_factor: float = 1.0) -> bool:
+        """Hard capability gate. Never overridable by a scenic bonus."""
+        if not self.lean_p95:
+            return False
+        demand = float(s.get("lean_p95") or 0.0)
+        if demand <= 0:
+            return False   # no crowd lean here: nothing to gate on
+        ceiling = (self.lean_p95 * self.margin / max(self.style_ratio, 0.3)) * weather_factor
+        return demand > ceiling
+
+    def seconds(self, s: dict) -> float:
+        """Observed speed first; road-class assumption only as a fallback.
+
+        Never divide by a missing speed -- that would mint a free shortcut.
+        """
+        v = float(s.get("speed_mean") or 0.0)
+        if v < 5.0:
+            v = float(s.get("speed_assumed") or 50)
+        return (float(s["length_m"]) / 1000.0) / max(v, 5.0) * 3600.0
+
+    def cost(self, s: dict, alpha: float, beta: float = 1.0,
+             weather: float = 0.0, junction_s: float = 0.0) -> float:
+        """cost = time * (1 + a*(1 - scenic) + b*risk) + junction_delay
+
+        All terms positive and the multiplier >= 1, so Dijkstra stays valid.
+        Junction delay is additive and outside alpha: it is a real delay, not a
+        matter of taste.
+        """
+        return (self.seconds(s)
+                * (1.0 + alpha * (1.0 - self.scenic(s)) + beta * self.risk(s, weather))
+                + junction_s)
+
+    def kpis(self, s: dict) -> dict:
+        return {
+            "seg_id": s["seg_id"],
+            "scenic": round(self.scenic(s), 3),
+            "risk": round(self.risk(s), 3),
+            "confidence": round(self.confidence(s), 3),
+        }

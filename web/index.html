@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>BMW Ride Planner</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header>
+  <div class="brand"><b>BMW</b> RIDE PLANNER <span class="tag">scenic score only</span></div>
+  <div id="health" class="muted">checking…</div>
+</header>
+
+<main>
+  <aside id="panel">
+    <section class="card">
+      <h2>1 · Rider data</h2>
+      <p class="muted">Pick a whole rider folder (e.g. <code>exampleUserA/recordedTrips</code>),
+        or individual <code>.csv</code> files, or a <code>.zip</code>.
+        The profile is built from whatever you give it.</p>
+
+      <label class="filebtn">
+        <input type="file" id="folder" webkitdirectory directory multiple>
+        <span>📁 Choose a folder…</span>
+      </label>
+      <label class="filebtn">
+        <input type="file" id="file" multiple accept=".csv,.zip">
+        <span>📄 Choose files…</span>
+      </label>
+      <div id="picked" class="muted"></div>
+
+      <div class="examples">
+        <span class="muted">or a bundled rider:</span>
+        <button data-rider="A" class="ex">A</button>
+        <button data-rider="B" class="ex">B</button>
+        <button data-rider="C" class="ex">C</button>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>2 · The ride</h2>
+      <div class="seg">
+        <button id="mLoop" class="mode on">Round trip</button>
+        <button id="mAb" class="mode">Point to point</button>
+      </div>
+      <label class="row" for="mins">
+        <span>How long <span class="muted" id="minsHint">minutes</span></span>
+        <input type="number" id="mins" min="15" max="480" step="15" value="120">
+      </label>
+      <div id="abHint" class="muted hidden">
+        Click the map to drop a destination.
+        <span id="destTxt"></span>
+      </div>
+      <button id="go" class="primary">Plan the ride</button>
+      <div id="status" class="status"></div>
+    </section>
+
+    <section class="card hidden" id="profileCard">
+      <h2>3 · What the bike said</h2>
+      <div id="profileBody"></div>
+    </section>
+
+    <section class="card hidden" id="routeCard">
+      <h2>4 · Routes</h2>
+      <div id="routeList"></div>
+      <div id="kpis"></div>
+    </section>
+  </aside>
+
+  <div id="map"></div>
+</main>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="/static/app.js"></script>
+</body>
+</html>
