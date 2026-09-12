@@ -6,9 +6,17 @@ installed Python 3.14.6, and Node v20.20.2 / npm 10.8.2 are present. No conda
 environment, no dependency gamble.
 
 ```bash
-pip install duckdb fastapi uvicorn numpy pyarrow
+pip install duckdb fastapi uvicorn numpy pyarrow          # core — verified
+pip install rasterio pyrosm                                # enrichment — DEM + OSM extract
 npm create vite@latest web -- --template react
 ```
+
+`rasterio` (Copernicus DEM and land-cover sampling) and `pyrosm` (parsing the
+Geofabrik OSM extract) serve the enrichment stage only. **Check their cp314
+wheels before committing to them** — the core five are verified, these two are
+not. If either has no wheel, the fallbacks are `osmium` for OSM and reading the
+DEM GeoTIFFs with `numpy` + a minimal GeoTIFF reader; neither blocks the demo,
+because enrichment is offline and optional.
 
 ---
 
@@ -21,11 +29,17 @@ npm create vite@latest web -- --template react
 | **Routing** | **Python `heapq` Dijkstra** over a Parquet edge list | ~300k nodes / ~1M edges in well under a second. No scipy dependency |
 | **Frontend** | **Vite + React (JSX) + Leaflet + Tailwind + Recharts** | Seven dashboard views need real state management; Recharts gives the Learnings progression charts nearly free |
 | **Map** | **Leaflet**, tiles **pre-cached locally** | Same library BMW's own viewer uses, so its morton grid/heat layer ports straight over |
-| **Weather** | **Open-Meteo** | No API key. Fetched once, cached to disk, frozen fallback |
-| **Geo POIs** | **Overpass** → `fixtures/` | Water, forest, viewpoints, `maxspeed`. Fetched once. **Never called live during the demo** |
+| **Weather** | **Open-Meteo** — forecast **and** archive | No API key. Forecast for the planned ride; archive to retroactively label past trips with the conditions they happened in. Cached, frozen fallback |
+| **Roads / POIs** | **OSM** — Geofabrik extract + Overpass | Road class, geometry curvature, surface, junctions, forest, water, viewpoints. Fetched once. **Never called live during the demo** |
+| **Terrain** | **Copernicus DEM** (GLO-30) | Gradient, relief, ridges, and the western horizon test behind the sunset KPI. Tiles downloaded once |
+| **Land cover** | **CLMS / CORINE** — deferred | Needs registration and a large raster; OSM `landuse` covers ~80% tonight. Interface written so it drops in later |
+| **Accidents** | **Unfallatlas** (DESTATIS) | Geocoded motorcycle accidents, **normalised by crowd exposure**. The strongest safety-criterion evidence available |
 | **Sun position** | **Local NOAA formula** | ~20 lines, zero dependencies, powers the sunset KPI |
 | **Trip tags** | **Local JSON file** | Emoji/emotion tagging needs persistence, not a database |
-| **Traffic** | **No API** — crowd temporal prior | No free keyless real-time source exists. Deriving congestion from BMW's own 85,699 trips is *stronger* than a stubbed API and earns another crowd-data point |
+| **Traffic** | **Crowd prior by default**, HERE/TomTom optional | No free keyless real-time source exists, and a key provisioned the night before is the one real liability. The prior comes from BMW's own 85,699 trips; a live layer overrides it only where a key is configured, and adds what the prior genuinely cannot — today's closures and roadworks |
+
+Full detail, licences, access mechanisms and build priority for all six external
+sources: [DATA_SOURCES.md](DATA_SOURCES.md).
 
 ### JSX, not TypeScript
 
@@ -43,17 +57,19 @@ the night gets eaten; `npm create vite` costs two minutes.
 ## Repo layout — one owner per directory
 
 ```
-precompute/    DuckDB SQL + runner → data/cells.parquet, data/edges.parquet
-engine/        FastAPI: scoring, Dijkstra, joyride, profile fitting, suggestions
+precompute/    DuckDB SQL + runner   → data/cells.parquet, data/edges.parquet
+enrich/        OSM · DEM · land cover · accidents joins
+                                     → data/cells_enriched.parquet
+engine/        FastAPI: scoring, Dijkstra, joyride, profile + skill vector, learning
 web/           Vite + React dashboard
-fixtures/      frozen weather / OSM / demo routes / map tiles
+fixtures/      frozen weather / OSM / DEM tiles / accidents / demo routes / map tiles
 plan/          these docs
 data/          generated artefacts (gitignored)
 ```
 
 | Directory | Owner |
 |---|---|
-| `precompute/` | one owner |
+| `precompute/` + `enrich/` | one owner |
 | `engine/` | Krish |
 | `web/` | one owner |
 
@@ -83,7 +99,10 @@ This is the unification that makes the ride-preview feature nearly free.
   "why": { "weights": { "curviness": 0.41, "altitude": 0.22, "water": 0.18,
                         "flow": 0.19 },
            "alternative": { "minutes": 94, "curviness": 128, "elev_gain": 500 },
-           "confidence": 0.86 }
+           "confidence": 0.86 },
+  "learning": { "dose": 0.18, "dimension": "lean", "delta": "+8°",
+                "gates_passed": ["ceiling", "single_novelty", "accident_rate"],
+                "segments": [ [412, 498] ] }
 }
 ```
 
@@ -105,6 +124,7 @@ GET  /riders                        A, B, C (+ any imported)
 GET  /riders/{id}/profile           weights, lean envelope, bike class, free-time histogram
 GET  /riders/{id}/trips             list + per-trip KPIs
 GET  /riders/{id}/coverage          visited level-14 cells → fog map
+GET  /riders/{id}/skill             skill vector: current / ceiling / delta per dimension
 GET  /riders/{id}/learnings         progression series + records + next challenge
 GET  /riders/{id}/suggestions       cards for the Suggestions view
 POST /riders/import                 point at a folder of recordedTrips

@@ -27,8 +27,13 @@ scores and three different routes.**
 | Mode toggle **Destination / Joyride** | which search strategy runs |
 | Profile chips **Sportive / Safer / Chill** | seeds the KPI weights |
 | Time budget | binary-searches `α` to hit it |
-| **Start time** | drives every `f(t)` KPI — sun position and traffic |
+| **Start time** | drives every `f(t)` KPI — sun position, weather, traffic |
+| **Challenge dose** | how much of the ride should be new ground: 5% / 10–15% / 20–25% |
 | Bike confirm | corrects the inferred bike class |
+
+A wet forecast collapses the challenge dose to zero automatically and the control
+shows why — the rider's safety ceilings shrink in the rain, so there is nothing
+in the stretch band to offer.
 
 The map shows **three route options** with the crowd fun-heat layer underneath
 and scenic stops pinned. Per route: KPI breakdown bars and a **"Why this route"**
@@ -60,16 +65,37 @@ in the app.
 
 ### 6. Learnings
 
-Progression over time: max lean, terrains explored, weather conditions ridden,
-altitude reached. A records wall.
+The **skill vector** rendered — five dimensions, each with the rider's
+demonstrated level, their safe ceiling, and the stretch band between them:
 
-**"Your next challenge"** — a concrete road whose crowd lean demand sits just
-above the rider's p90, with the safety reasoning shown alongside it.
+| Dimension | Shown as |
+|---|---|
+| Lean | current p90, ceiling, and the road-normalised style ratio |
+| Curviness | °/km of the roads they ride |
+| Gradient | steepest ridden, max altitude |
+| Conditions | which weather bands they have actually ridden in |
+| Terrain | % of the region covered (links to the fog map) |
+
+Progression over time per dimension, plus a records wall (max lean, max
+altitude, longest ride, first wet ride, most curvature in one ride).
+
+**"Your next challenge"** — a concrete named road whose demand sits just above
+the rider's p90, **with the gates shown**: which single dimension is being
+stretched, that every other dimension stays inside the ceiling, and that the
+road's accident rate is below the regional average for the traffic it carries.
+
+Showing the gates is the point. It is the difference between "here's a harder
+road" and "here's a harder road, and here is why it is still a safe one".
 
 ### 7. Area metrics
 
 The crowd layer per morton square, with a switchable metric: curviness / lean /
-speed / ABS rate / traffic by time band.
+speed / ABS rate / traffic by time band / **accident rate per rider-km** /
+**crowd-data confidence**.
+
+The confidence layer is worth having on screen for the pitch — it shows exactly
+where the scores come from measured lean versus road geometry, which is the
+honest answer to "what happens where you have no data?"
 
 This is the brief's *"visual representation of the data and algorithm"*
 deliverable — and it doubles as our own debugging tool.
@@ -93,10 +119,16 @@ things carry it:
    difference decomposed: *"14 minutes slower. 3.2× the lean changes. 340 m more
    climb. One fewer inner-city crossing."* The sentence that wins the room,
    because it states a trade-off honestly instead of asserting a score.
-5. **Ride preview** — predicted lean and speed gauges moving along a road the
+5. **The learning card** — *"18% of this ride is new ground for you: the
+   Kesselberg section asks for about 8° more lean than you've ridden, in dry
+   weather on a road type you know. Accident rate there is below the regional
+   average for the traffic it carries."* One dimension named, the gates shown,
+   the safety evidence cited. The stretch segments are highlighted on the map.
+6. **Ride preview** — predicted lean and speed gauges moving along a road the
    rider has not ridden yet.
-6. **Honest gaps** — where there is no crowd data the UI says so, rather than
-   scoring zero and quietly routing around a perfectly good road.
+7. **Honest gaps** — where crowd data is thin the UI shows the confidence value
+   and says the score is geometry-derived, rather than scoring zero and quietly
+   routing around a perfectly good road.
 
 ---
 
@@ -107,14 +139,21 @@ feature freeze, it does not go on a slide.**
 
 **Demo-critical**
 Overview · Plan (both modes) · Ride Preview · Area metrics · rider switching ·
-offline hardening
+the learning card on a planned route · offline hardening
 
 **Should-have**
-Suggestions cards · Fog map · Learnings
+Suggestions cards · Fog map · Learnings (full skill vector) · accident layer ·
+DEM gradient
 
 **Cut first, without apology**
-Emoji tagging · records wall · notifications · music · road construction · OSM
-`maxspeed` enrichment
+Emoji tagging · records wall · notifications · live traffic · CLMS land cover ·
+music
 
-Music and road construction have **no data behind them** — they should not reach
-a slide either way.
+Music has **no data behind it** and should not reach a slide. Live traffic needs
+an API key and the crowd prior already covers congestion — wire the interface,
+demo without it.
+
+One exception to the cut list: **the learning card is demo-critical even if the
+full Learnings view is not.** The rider-development thesis is what the pitch
+leads with, so at least one route must visibly say which single dimension it
+stretches and why that is still safe.
