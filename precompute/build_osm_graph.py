@@ -171,6 +171,78 @@ def ways_to_segments(ways: list[dict]) -> list[dict]:
     return segments
 
 
+CHUNK_M = 100.0
+
+
+def subdivide(segments: list[dict]) -> list[dict]:
+    """Cut junction-to-junction segments into uniform ~100 m chunks.
+
+    Scoring at junction granularity is too coarse: a 2 km way averages one
+    great corner away into a mediocre mean. 100 m is the resolution the crowd
+    data actually supports, and because the geometry is still OSM the route
+    stays physically on the road -- which a 100 m *grid* could not guarantee.
+
+    Interior cut points get synthetic node ids above the OSM range so they can
+    never collide with a real junction id.
+    """
+    out: list[dict] = []
+    next_node = 10_000_000
+    for seg in segments:
+        pts = [tuple(p) for p in seg["geometry"]]
+        if seg["length_m"] <= CHUNK_M * 1.5 or len(pts) < 2:
+            out.append(dict(seg, seg_id=len(out)))
+            continue
+
+        # Walk the polyline, emitting a chunk every CHUNK_M metres.
+        chunks: list[list[tuple[float, float]]] = []
+        cur = [pts[0]]
+        acc = 0.0
+        for i in range(len(pts) - 1):
+            a, b = pts[i], pts[i + 1]
+            d = haversine_m(a, b)
+            if d <= 0:
+                continue
+            t0 = 0.0
+            while acc + d * (1 - t0) >= CHUNK_M:
+                need = (CHUNK_M - acc) / d
+                t0 += need
+                cut = (a[0] + (b[0] - a[0]) * t0, a[1] + (b[1] - a[1]) * t0)
+                cur.append(cut)
+                chunks.append(cur)
+                cur = [cut]
+                acc = 0.0
+                d_rem = d * (1 - t0)
+                if d_rem <= 0:
+                    break
+            acc += d * (1 - t0)
+            cur.append(b)
+        if len(cur) > 1:
+            chunks.append(cur)
+        if not chunks:
+            out.append(dict(seg, seg_id=len(out)))
+            continue
+
+        prev_node = seg["node_a"]
+        for j, ch in enumerate(chunks):
+            last = (j == len(chunks) - 1)
+            if last:
+                node_b = seg["node_b"]
+            else:
+                node_b = next_node
+                next_node += 1
+            length = sum(haversine_m(ch[k], ch[k + 1]) for k in range(len(ch) - 1))
+            if length < 1:
+                continue
+            out.append(dict(seg,
+                            seg_id=len(out),
+                            node_a=prev_node,
+                            node_b=node_b,
+                            length_m=length,
+                            geometry=[[x[0], x[1]] for x in ch]))
+            prev_node = node_b
+    return out
+
+
 def geometric_curviness(pts: list[list[float]]) -> float:
     """Heading change per km from geometry, resampled to uniform spacing.
 
@@ -323,13 +395,15 @@ def main() -> None:
     print(f"[1/5] {len(ways):,} OSM ways", flush=True)
 
     segments = ways_to_segments(ways)
-    print(f"[2/5] {len(segments):,} segments after splitting at junctions", flush=True)
+    print(f"[2/6] {len(segments):,} segments after splitting at junctions", flush=True)
+    segments = subdivide(segments)
+    print(f"[3/6] {len(segments):,} chunks after {CHUNK_M:.0f} m subdivision", flush=True)
 
     idx = build_index(segments)
-    print(f"[3/5] spatial index: {len(idx):,} cells", flush=True)
+    print(f"[4/6] spatial index: {len(idx):,} cells", flush=True)
 
     cells = crowd_cells(bbox, args.shards)
-    print(f"[4/5] {len(cells):,} crowd cells in bbox ({time.time() - t0:.0f}s)", flush=True)
+    print(f"[5/6] {len(cells):,} crowd cells in bbox ({time.time() - t0:.0f}s)", flush=True)
 
     acc = defaultdict(lambda: defaultdict(float))
     trips_on = defaultdict(set)
@@ -351,8 +425,12 @@ def main() -> None:
                 a[k] += float(c[k]) * float(c["n_points"] or 0)
                 a[k + "_w"] += float(c["n_points"] or 0)
         a["n_trips"] = max(a["n_trips"], float(c["n_trips"] or 0))
-    print(f"[5/5] snapped {snapped:,}/{len(cells):,} cells onto segments "
+    print(f"[6/6] snapped {snapped:,}/{len(cells):,} cells onto segments "
           f"({100 * snapped / max(len(cells), 1):.0f}%)", flush=True)
+
+    from .fetch_dem import load_dem
+    dem = load_dem(bbox)
+    print(f"      terrain: {'Copernicus DEM' if dem.ok else 'unavailable'}", flush=True)
 
     for seg in segments:
         a = acc.get(seg["seg_id"])
@@ -390,6 +468,37 @@ def main() -> None:
             seg["elev_mean"] = 0.0
         seg["speed_assumed"] = CLASS_SPEED.get(seg["highway"], 50)
 
+        # Terrain from the Copernicus DEM. Real elevation everywhere, including
+        # roads no BMW rider has touched -- the trips' own GPS altitude only
+        # covers crowd-ridden roads and is noisier.
+        g = seg["geometry"]
+        e0 = dem.sample(g[0][0], g[0][1])
+        e1 = dem.sample(g[-1][0], g[-1][1])
+        if e0 is not None and e1 is not None:
+            seg["dem_elev_m"] = round((e0 + e1) / 2, 1)
+            seg["dem_gradient_pct"] = round(
+                100.0 * (e1 - e0) / max(seg["length_m"], 1.0), 2)
+        else:
+            seg["dem_elev_m"] = None
+            seg["dem_gradient_pct"] = None
+
+    # Local relief: elevation range within ~2 km of the segment. This is what
+    # separates "high up" from "in the mountains" -- a plateau at 800 m is not
+    # scenic the way a valley floor beneath peaks is.
+    if dem.ok:
+        for seg in segments:
+            g = seg["geometry"]
+            mid = g[len(g) // 2]
+            vals = []
+            for dla, dlo in ((0, 0), (0.018, 0), (-0.018, 0), (0, 0.027), (0, -0.027)):
+                v = dem.sample(mid[0] + dla, mid[1] + dlo)
+                if v is not None:
+                    vals.append(v)
+            seg["dem_relief_m"] = round(max(vals) - min(vals), 1) if len(vals) > 2 else None
+    else:
+        for seg in segments:
+            seg["dem_relief_m"] = None
+
     adjacency: dict[int, list[int]] = defaultdict(list)
     for seg in segments:
         adjacency[seg["node_a"]].append(seg["seg_id"])
@@ -406,6 +515,8 @@ def main() -> None:
         "n_segments_with_crowd": covered,
         "crowd_coverage_pct": round(100 * covered / max(len(segments), 1), 1),
         "snap_max_m": SNAP_MAX_M,
+        "chunk_m": CHUNK_M,
+        "terrain": "copernicus-dem-30m" if dem.ok else None,
     }
     with open(os.path.join(args.out, "segments.json"), "w") as fh:
         json.dump(segments, fh)

@@ -19,7 +19,7 @@ from fastapi.staticfiles import StaticFiles
 
 from engine import weather as weather_mod
 from engine.profile import build_profile
-from engine.router import Graph, plan_ab, plan_loop
+from engine.router import Graph, plan_alternatives, plan_heatmap, plan_loop
 from engine.scoring import Scorer
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -73,17 +73,38 @@ def health():
         return JSONResponse({"ok": False, "detail": e.detail}, status_code=503)
 
 
+def _in_bbox(point: tuple[float, float], bbox: list | tuple) -> bool:
+    lat, lon = point
+    south, west, north, east = map(float, bbox)
+    return south <= lat <= north and west <= lon <= east
+
+
 def _plan(paths: list[str], name: str, mode: str, minutes: float | None,
-          dest: tuple[float, float] | None, start_hour: float | None = None) -> dict:
+          dest: tuple[float, float] | None, start_hour: float | None = None,
+          origin_override: tuple[float, float] | None = None,
+          radius_km: float = 100.0) -> dict:
     graph = get_graph()
+    meta = _state.get("meta", {})
+    if mode == "heatmap" and (not dest or not origin_override):
+        raise HTTPException(422, "heatmap mode requires origin_lat/lon and dest_lat/lon")
+    if origin_override and not _in_bbox(origin_override, meta.get("bbox", [])):
+        raise HTTPException(422, {"message": "origin is outside the covered graph",
+                                  "meta": {"bbox": meta.get("bbox")}})
+    if dest and not _in_bbox(dest, meta.get("bbox", [])):
+        raise HTTPException(422, {"message": "destination is outside the covered graph",
+                                  "meta": {"bbox": meta.get("bbox")}})
+
     profile = build_profile(paths, graph.segments, name=name,
                             index=_state.get("index"))
-    # Scenic-only: the scorer takes the profile purely for the capability
-    # ceiling and never for taste weights.
-    scorer = Scorer(graph.segments, profile)
 
     ctx = profile["context"]
-    origin = ctx["origin"]
+    # Point A: whatever the user clicked, else the rider's own usual start.
+    if origin_override:
+        origin = {"lat": origin_override[0], "lon": origin_override[1]}
+        origin_source = "chosen on the map"
+    else:
+        origin = ctx["origin"]
+        origin_source = "the rider's own most frequent trip origin"
     origin_node = graph.nearest_node(origin["lat"], origin["lon"], require_degree=2)
     if origin_node is None:
         raise HTTPException(422, "could not place the rider's start point on the road network")
@@ -99,23 +120,42 @@ def _plan(paths: list[str], name: str, mode: str, minutes: float | None,
     now = _dt.datetime.now(tz)
     hour = int(ctx["usual_start_hour"]) if start_hour is None else int(start_hour)
     depart = now.replace(hour=max(0, min(23, hour)), minute=0, second=0, microsecond=0)
-    sun_ctx = scorer.set_time(depart, origin["lat"], origin["lon"])
-
     wx = weather_mod.fetch(origin["lat"], origin["lon"])
-    wargs = dict(weather=wx.get("risk", 0.0),
-                 weather_factor=wx.get("capability_factor", 1.0))
+    weather_factor = wx.get("capability_factor", 1.0)
+    profile["lean_ceiling"] = round(
+        float(profile.get("lean_ceiling") or 0.0) * weather_factor, 2)
+    profile["capability"]["lean_ceiling"] = profile["lean_ceiling"]
+    scorer = Scorer(graph.segments, profile)
+    sun_ctx = scorer.set_time(depart, origin["lat"], origin["lon"])
+    wargs = dict(weather=wx.get("risk", 0.0), weather_factor=weather_factor)
 
-    if mode == "ab":
+    if mode == "ab" or mode == "heatmap":
         if not dest:
             raise HTTPException(400, "point-to-point mode needs a destination")
-        goal = graph.nearest_node(dest[0], dest[1], require_degree=2)
+        goal = graph.nearest_node(dest[0], dest[1], require_degree=2,
+                                  component=graph.component_of(origin_node))
         if goal is None:
-            raise HTTPException(422, "destination is not near any road in the covered region")
+            raise HTTPException(422, {"message": "destination is not connected to the origin in the covered region",
+                                      "meta": {"bbox": _state["meta"].get("bbox")}})
         if goal == origin_node:
             raise HTTPException(422, "destination is the same place as the start")
-        routes = plan_ab(graph, scorer, origin_node, goal, minutes, **wargs)
+        if mode == "heatmap":
+            sampled = plan_heatmap(graph, scorer, origin_node, goal,
+                                   radius_km=radius_km, n=30,
+                                   highway_avoidance=1.0,
+                                   twist_avoidance=2.5,
+                                   traffic_avoidance=2.0, **wargs)
+            routes = sampled["routes"]
+            heatmap = sampled["heatmap"]
+            heatmap_meta = sampled["meta"]
+        else:
+            routes = plan_alternatives(graph, scorer, origin_node, goal, n=6, **wargs)
+            heatmap = None
+            heatmap_meta = None
         dest_pos = graph.node_pos(goal)
     else:
+        heatmap = None
+        heatmap_meta = None
         routes = plan_loop(graph, scorer, origin_node, minutes, **wargs)
         dest_pos = None
 
@@ -128,7 +168,7 @@ def _plan(paths: list[str], name: str, mode: str, minutes: float | None,
 
     olat, olon = graph.node_pos(origin_node)
     profile.pop("_cells", None)
-    return {
+    response = {
         "mode": mode,
         "requested_minutes": minutes,
         "profile": profile,
@@ -138,7 +178,13 @@ def _plan(paths: list[str], name: str, mode: str, minutes: float | None,
         "destination": ({"lat": dest_pos[0], "lon": dest_pos[1]} if dest_pos else None),
         "routes": routes,
         "explain": {
-            "value_term": "scenic score only (no fun/growth/taste weighting)",
+            "value_term": ("personal heatmap ranking from scenic + fun scores; "
+                            "highways are strongly avoided, not forbidden; "
+                            "long uninterrupted roads are penalised and repeated "
+                            "twists preferred; traffic pressure from BMW crowd "
+                            "telemetry raises cost"
+                            if mode == "heatmap"
+                            else "scenic score only (legacy route mode)"),
             "scenic_is_time_dependent": (
                 "scaled by available light, plus a golden-hour bonus for roads "
                 "that actually face the low sun"),
@@ -148,10 +194,14 @@ def _plan(paths: list[str], name: str, mode: str, minutes: float | None,
                               "tunnel penalty"],
             "profile_used_for": ["capability ceiling (hard exclusion)",
                                  "start point", "default duration"],
-            "why_origin": "the start point of the rider's own most frequent trips",
+            "why_origin": origin_source,
             "graph": _state["meta"],
         },
     }
+    if mode == "heatmap":
+        response["heatmap"] = heatmap
+        response["heatmap_meta"] = heatmap_meta
+    return response
 
 
 @app.post("/api/plan/upload")
@@ -162,6 +212,9 @@ async def plan_upload(
     dest_lat: float | None = Form(None),
     dest_lon: float | None = Form(None),
     start_hour: float | None = Form(None),
+    origin_lat: float | None = Form(None),
+    origin_lon: float | None = Form(None),
+    radius_km: float = Form(100.0),
 ):
     """Upload rider CSVs (or a zip) and get routes back."""
     tmp = tempfile.mkdtemp(prefix="bmw_upload_")
@@ -186,7 +239,49 @@ async def plan_upload(
             raise HTTPException(400, "no .csv telemetry found in the upload")
         name = os.path.basename(files[0].filename or "uploaded").rsplit(".", 1)[0]
         dest = (dest_lat, dest_lon) if dest_lat is not None and dest_lon is not None else None
-        return _plan(csvs, f"upload:{name}", mode, minutes, dest, start_hour)
+        org = (origin_lat, origin_lon) if origin_lat is not None and origin_lon is not None else None
+        return _plan(csvs, f"upload:{name}", mode, minutes, dest, start_hour, org,
+                     radius_km)
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
+@app.post("/api/heatmap")
+@app.post("/api/plan/heatmap")
+async def heatmap_upload(
+    files: list[UploadFile] = File(...),
+    origin_lat: float = Form(...),
+    origin_lon: float = Form(...),
+    dest_lat: float = Form(...),
+    dest_lon: float = Form(...),
+    radius_km: float = Form(100.0),
+    start_hour: float | None = Form(None),
+):
+    """Upload telemetry and build the X→Y route heatmap."""
+    tmp = tempfile.mkdtemp(prefix="bmw_heatmap_")
+    try:
+        csvs: list[str] = []
+        for f in files:
+            path = os.path.join(tmp, os.path.basename(f.filename or "upload"))
+            with open(path, "wb") as out:
+                shutil.copyfileobj(f.file, out)
+            if path.lower().endswith(".zip"):
+                with zipfile.ZipFile(path) as z:
+                    z.extractall(tmp)
+            elif path.lower().endswith(".csv"):
+                csvs.append(path)
+        for dirpath, _dirs, names in os.walk(tmp):
+            for filename in names:
+                if filename.lower().endswith(".csv") and not filename.startswith("."):
+                    path = os.path.join(dirpath, filename)
+                    if path not in csvs:
+                        csvs.append(path)
+        if not csvs:
+            raise HTTPException(400, "no .csv telemetry found in the upload")
+        name = os.path.basename(files[0].filename or "uploaded").rsplit(".", 1)[0]
+        return _plan(csvs, f"upload:{name}", "heatmap", None,
+                     (dest_lat, dest_lon), start_hour,
+                     (origin_lat, origin_lon), radius_km)
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
 
@@ -194,7 +289,10 @@ async def plan_upload(
 @app.post("/api/plan/example/{rider}")
 def plan_example(rider: str, mode: str = "loop", minutes: float | None = None,
                  dest_lat: float | None = None, dest_lon: float | None = None,
-                 start_hour: float | None = None):
+                 start_hour: float | None = None,
+                 origin_lat: float | None = None, origin_lon: float | None = None,
+                 radius_km: float = 100.0):
+
     """Convenience path for the bundled example riders (A / B / C)."""
     folder = os.path.join(DATASET, f"exampleUser{rider.upper()}", "recordedTrips")
     if not os.path.isdir(folder):
@@ -204,7 +302,9 @@ def plan_example(rider: str, mode: str = "loop", minutes: float | None = None,
         if f.endswith(".csv") and not f.startswith(".")
     )
     dest = (dest_lat, dest_lon) if dest_lat is not None and dest_lon is not None else None
-    return _plan(csvs, f"exampleUser{rider.upper()}", mode, minutes, dest, start_hour)
+    org = (origin_lat, origin_lon) if origin_lat is not None and origin_lon is not None else None
+    return _plan(csvs, f"exampleUser{rider.upper()}", mode, minutes, dest, start_hour,
+                 org, radius_km)
 
 
 @app.get("/api/segments")

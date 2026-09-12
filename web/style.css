@@ -66,7 +66,10 @@ code { background: #1b222c; padding: 0 3px; border-radius: 3px; font-size: 11px;
 #picked { margin: 4px 0 2px; font-size: 11px; }
 .seg { display: flex; gap: 6px; margin-bottom: 10px; }
 .seg .mode { flex: 1; }
-.seg .mode.on { background: var(--blue); border-color: var(--blue); font-weight: 600; }
+.seg .mode.on, .seg .score.on { background: var(--blue); border-color: var(--blue); font-weight: 600; }
+.seg .score { flex: 1; }
+select { width: 90px; background: #1f2630; color: var(--fg); border: 1px solid var(--line);
+         border-radius: 6px; padding: 6px 8px; font-size: 13px; }
 .row { display: flex; align-items: center; justify-content: space-between; margin: 8px 0; }
 .row input { width: 90px; background: #1f2630; color: var(--fg); border: 1px solid var(--line);
              border-radius: 6px; padding: 6px 8px; font-size: 13px; }
@@ -75,3 +78,7 @@ code { background: #1b222c; padding: 0 3px; border-radius: 3px; font-size: 11px;
 .legend { font-size: 11px; color: var(--muted); margin-top: 8px; line-height: 1.6; }
 .legend i { display: inline-block; width: 18px; height: 3px; vertical-align: middle;
             margin-right: 5px; border-radius: 2px; }
+
+.pick.on { background: var(--blue); border-color: var(--blue); font-weight: 600; }
+#next { width: 100%; margin-top: 6px; }
+.rank { font-size: 11px; color: var(--muted); margin-top: 6px; }
