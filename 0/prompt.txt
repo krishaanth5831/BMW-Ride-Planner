@@ -1,0 +1,5 @@
+can you download the entire skills repo and learn how to use it and then create a checkpoint for testing
+
+---
+
+then also merge everything to main
