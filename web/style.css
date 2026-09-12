@@ -29,6 +29,7 @@ button:disabled { opacity: .5; cursor: default; }
 button.primary { background: var(--blue); border-color: var(--blue); width: 100%; font-weight: 600; }
 .examples { margin-top: 10px; display: flex; align-items: center; gap: 6px; }
 .examples .ex { padding: 4px 12px; }
+.examples .ex.on { background: var(--blue); border-color: var(--blue); font-weight: 600; }
 .status { margin-top: 10px; font-size: 12px; min-height: 1.4em; }
 .status.err { color: #f85149; }
 .status.ok { color: var(--r1); }

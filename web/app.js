@@ -6,7 +6,7 @@ L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
 
 const scenicLayer = L.layerGroup().addTo(map);
 const routeLayer = L.layerGroup().addTo(map);
-let plan = null, selected = 0, mode = 'loop', scoreMode = 'scenic';
+let plan = null, selected = 0, mode = 'loop', scoreMode = 'scenic', exampleRider = null;
 let ptA = null, ptB = null, arm = 'A';
 let markA = null, markB = null;
 
@@ -195,7 +195,15 @@ async function send(url, opts) {
   try {
     const res = await fetch(url, opts);
     const body = await res.json();
-    if (!res.ok) throw new Error(typeof body.detail === 'string' ? body.detail : (body.detail?.message || res.statusText));
+    if (!res.ok) {
+      const d = body.detail;
+      let msg = typeof d === 'string' ? d : (d?.message || res.statusText);
+      // Show the covered area too -- "outside the graph" is only actionable if
+      // you are told where the graph actually is.
+      const bb = d?.meta?.bbox;
+      if (bb) msg += ` — covered area is ${bb[0]}, ${bb[1]} to ${bb[2]}, ${bb[3]}.`;
+      throw new Error(msg);
+    }
     plan = body; selected = 0;
     renderProfile(body.profile, body.weather, body.explain);
     draw();
@@ -261,10 +269,26 @@ map.on('click', (e) => {
 $('pickA').addEventListener('click', () => setArm('A'));
 $('pickB').addEventListener('click', () => setArm('B'));
 
+// Where the rider profile comes from: uploaded telemetry, or one of the
+// bundled example riders. Both have to work for every mode -- picking rider A
+// and then hitting Build Heatmap used to fail, because only the upload path
+// was wired up.
 function submitPlan(heatmap) {
   const files = chosenFiles();
-  if (!files.length) { setStatus('Pick a folder or some files first.', 'err'); return; }
-  if ((mode === 'ab' || heatmap) && (!ptA || !ptB)) { setStatus('Click the map to set both A and B.', 'err'); return; }
+  if ((mode === 'ab' || heatmap) && (!ptA || !ptB)) {
+    setStatus('Set both A and B on the map first.', 'err'); return;
+  }
+  if (heatmap && ptA && ptB && ptA[0] === ptB[0] && ptA[1] === ptB[1]) {
+    setStatus('A and B are the same place — move one of them.', 'err'); return;
+  }
+  if (!files.length) {
+    if (exampleRider) {
+      setStatus(`Planning for example rider ${exampleRider}…`);
+      send(`/api/plan/example/${exampleRider}?${params()}`, { method: 'POST' });
+      return;
+    }
+    setStatus('Pick a folder, some files, or a bundled rider first.', 'err'); return;
+  }
   const fd = new FormData();
   for (const f of files) fd.append('files', f);
   fd.append('mode', heatmap ? 'heatmap' : mode);
@@ -279,8 +303,9 @@ $('go').addEventListener('click', () => submitPlan(false));
 $('buildHeatmap').addEventListener('click', () => submitPlan(true));
 
 document.querySelectorAll('.ex').forEach((b) => b.addEventListener('click', () => {
-  if (mode === 'ab' && (!ptA || !ptB)) { setStatus('Click the map to set both A and B.', 'err'); return; }
-  send(`/api/plan/example/${b.dataset.rider}?${params()}`, { method: 'POST' });
+  exampleRider = b.dataset.rider;
+  document.querySelectorAll('.ex').forEach((x) => x.classList.toggle('on', x === b));
+  submitPlan(mode === 'heatmap');
 }));
 
 document.querySelectorAll('.score').forEach((b) => b.addEventListener('click', () => {
