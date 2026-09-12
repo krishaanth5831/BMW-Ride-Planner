@@ -9,7 +9,7 @@ they own.
 | Doc | What's in it |
 |---|---|
 | [DATASET.md](DATASET.md) | What the BMW dataset actually contains — measured column fill rates, dead columns, geography, and the three claims in our notes the data cannot support |
-| [ALGORITHM.md](ALGORITHM.md) | **The main doc.** How a route is chosen end to end: cell aggregation, graph construction, the rider profile's three channels of influence, the learning system, KPI scoring, the cost function, both search modes, and how the algorithm explains itself |
+| [ALGORITHM.md](ALGORITHM.md) | **The main doc.** How a route is chosen end to end: segment snapping with kernel attribution, the junction-aware turn-expanded graph, the rider profile's three channels of influence, the learning system, KPI scoring, the cost function, both search modes, and how the algorithm explains itself |
 | [DATA_SOURCES.md](DATA_SOURCES.md) | The six external sources — OSM, Copernicus DEM, CLMS land cover, Open-Meteo, live traffic, government accident data — what each contributes, what it costs, and the build priority |
 | [STACK.md](STACK.md) | Tech stack, repo layout, API surface, the shared `Track` shape, demo hardening |
 | [UI.md](UI.md) | The dashboard — seven views, rider switching, scope tiers |
@@ -38,22 +38,53 @@ angle**.
 
 ## The algorithm in six lines
 
-1. Cut Bavaria into ~100 m squares (BMW's dataset already indexes them by
-   `morton_code`).
-2. Ask 85,699 real rides what each square is like — how much the bike leaned,
-   how much the lean *changed*, how fast people actually went, whether ABS fired.
-3. Build the road network out of **observed** square-to-square transitions, so we
-   route on roads riders actually ride at speeds they actually ride them; layer
-   OSM topology on top so we can also score roads nobody has ridden.
-4. Enrich every square with terrain, land cover, weather and
-   **exposure-normalised accident rates** — see [DATA_SOURCES.md](DATA_SOURCES.md).
-5. Score each square for scenic / fun / risk / growth, weighted by what *this*
-   rider's own telemetry says they like, and ceilinged by what they can safely
-   handle.
-6. Run Dijkstra on `cost = time × (1 + α·(1 − good) + β·risk)`. One slider, `α`,
+1. Take OSM roads, **split them at junctions**, and subdivide to uniform ~200 m
+   pieces. Junctions are nodes, segments are edges — the scoring unit and the
+   routing unit are the same object, so routes follow real roads.
+2. Snap 85,699 real rides onto those segments with **kernel attribution** —
+   weighted by distance and heading rather than hard-binned, so a hairpin is
+   never split into two half-corners.
+3. Measure what each segment did to a motorcycle: how much the bike leaned, how
+   much the lean *changed*, how fast people actually went, whether ABS fired.
+4. Enrich with terrain, land cover, weather and **exposure-normalised accident
+   rates** — see [DATA_SOURCES.md](DATA_SOURCES.md).
+5. Score each segment for scenic / fun / risk / growth, weighted by what *this*
+   rider's telemetry says they like, and ceilinged by what they can safely handle.
+6. Run Dijkstra over a **turn-expanded** graph on
+   `cost = time × (1 + α·(1 − good) + β·risk) + junction_delay`. One slider, `α`,
    turns a commute into a ride.
 
 Full derivation, worked example and pseudocode in [ALGORITHM.md](ALGORITHM.md).
+
+## Why segments and not a grid
+
+A 100 m square is not a road. It can hold a motorway and its frontage road, or a
+junction, or half a corner — and **a hairpin straddling a boundary is measured as
+two half-corners**, degrading the single best feature we have because of an
+arbitrary line on a map. "Flow" is a green flag in BMW's brief and it is a
+property of a *sequence* of corners, which binning destroys outright.
+
+`morton_code` survives as a **spatial index** — prefix queries, bucketing the
+snap join. It is no longer what we score.
+
+## Junctions cost seconds, not points
+
+Junctions are where standstills, risk and navigation load all concentrate. Three
+things had to be right:
+
+1. **A junction only costs you if you stop or turn.** Naive "fewest junctions" is
+   secretly a *motorway-seeking* objective — motorways have almost no at-grade
+   junctions. Passing a side road with priority is free.
+2. **Measure the delay, don't count the junctions.** Crowd speed profiles give an
+   observed delay **in seconds** per turn per time band. The unit is the bound:
+   ten junctions at ~15 s is 2.5 minutes, which can never justify a 40 km detour.
+   No tuning constant to guess.
+3. **Turn costs need a turn-expanded graph** — nodes are directed segments, arcs
+   are permitted turns. That is also where one-ways, OSM turn restrictions and
+   U-turn prevention come from free.
+
+There is a regression test for trap 1 in the verification list: enabling junction
+cost must **not** increase the motorway share of routes.
 
 ## How the rider profile actually changes the route
 
@@ -67,7 +98,7 @@ explainable and safe:
 | **Context** | when and how do they ride? | defaults, suggestions | Yes |
 
 Capability uses a **road-normalised style ratio** — the rider's lean compared to
-the crowd's lean *on the same squares* — because raw lean angle conflates the
+the crowd's lean *on the same segments* — because raw lean angle conflates the
 road with the rider. A cautious rider on a mountain pass out-leans a fast rider
 on a motorway.
 
@@ -110,10 +141,10 @@ The brief names its evaluation metrics explicitly. Each one is earned:
 
 | Rubric metric | Delivered by |
 |---|---|
-| Usage of BMW **Crowd Data** | 85,699-trip cell aggregate → *is* the routing graph, plus the area-metrics view |
+| Usage of BMW **Crowd Data** | 85,699-trip segment aggregate, measured junction delays, congestion prior, and the exposure denominator for accident rates |
 | Usage of BMW **Personal Rider Data** | Revealed-preference weights, road-normalised style ratio, skill vector, fog map, records, growth targeting |
 | Usage of **External Sources** | OSM · Copernicus DEM · CLMS land cover · Open-Meteo (forecast **and** archive) · live traffic · government accident data — [DATA_SOURCES.md](DATA_SOURCES.md) |
-| **Scalability & Efficiency** | DuckDB over Parquet + morton-prefix pruning: 13 GB → ~30 MB served |
+| **Scalability & Efficiency** | DuckDB over Parquet, morton-prefix bucketing of the snap join: 13 GB → ~30 MB served |
 | Calculation of **Fun Score** | The KPI scorecard, normalised per-km, explainable live on screen |
 | Consideration of **Rider Safety** | Capability ceiling as a *hard constraint*, exposure-normalised accident rates, one-novelty-at-a-time gate, weather-shrunk ceilings |
 

@@ -11,12 +11,16 @@ pip install rasterio pyrosm                                # enrichment — DEM 
 npm create vite@latest web -- --template react
 ```
 
-`rasterio` (Copernicus DEM and land-cover sampling) and `pyrosm` (parsing the
-Geofabrik OSM extract) serve the enrichment stage only. **Check their cp314
-wheels before committing to them** — the core five are verified, these two are
-not. If either has no wheel, the fallbacks are `osmium` for OSM and reading the
-DEM GeoTIFFs with `numpy` + a minimal GeoTIFF reader; neither blocks the demo,
-because enrichment is offline and optional.
+**`pyrosm` is now load-bearing, not optional.** OSM ways split at junctions
+*define* the segments everything is scored and routed on, so parsing the
+Geofabrik extract is on the critical path. Check its cp314 wheel **first**; if it
+has none, fall back to `osmium`, and if that also fails, the escape hatch is to
+build segments from the crowd graph by collapsing chains of degree-2 nodes
+(see [ALGORITHM.md](ALGORITHM.md) §3) — road-following geometry with no download,
+at the cost of OSM tags and turn restrictions.
+
+`rasterio` (DEM and land-cover sampling) stays genuinely optional — enrichment is
+offline, and a missing wheel costs features, not the demo.
 
 ---
 
@@ -24,11 +28,11 @@ because enrichment is offline and optional.
 
 | Layer | Choice | Why this one |
 |---|---|---|
-| **Data** | **DuckDB + Parquet** | The entire cell aggregation is *one SQL query*. `read_csv('**/*.csv', filename=true)` globs all 85,699 files and `lag(sensorsbankingangle) OVER (PARTITION BY filename ORDER BY timestampinmillis)` gives Σ\|Δlean\| directly. Spills to disk (only ~6 GB RAM free). Replaces hundreds of lines of multiprocessing — and columnar storage + morton-prefix pruning **is** the scalability answer BMW grades |
+| **Data** | **DuckDB + Parquet** | The segment aggregation is close to one SQL query. `read_csv('**/*.csv', filename=true)` globs all 85,699 files and `lag(sensorsbankingangle) OVER (PARTITION BY filename ORDER BY timestampinmillis)` gives Σ\|Δlean\| directly. Spills to disk (only ~6 GB RAM free). Replaces hundreds of lines of multiprocessing — and columnar storage + morton-prefix bucketing of the snap join **is** the scalability answer BMW grades |
 | **API** | **FastAPI + uvicorn** | Auto-generated OpenAPI docs double as the "algorithm walk-through" artefact the brief asks for |
-| **Routing** | **Python `heapq` Dijkstra** over a Parquet edge list | ~300k nodes / ~1M edges in well under a second. No scipy dependency |
+| **Routing** | **Python `heapq` Dijkstra** over the turn-expanded graph | Turn expansion multiplies nodes 2–4×; still well under a second. No scipy dependency |
 | **Frontend** | **Vite + React (JSX) + Leaflet + Tailwind + Recharts** | Seven dashboard views need real state management; Recharts gives the Learnings progression charts nearly free |
-| **Map** | **Leaflet**, tiles **pre-cached locally** | Same library BMW's own viewer uses, so its morton grid/heat layer ports straight over |
+| **Map** | **Leaflet**, tiles **pre-cached locally** | Same library BMW's own viewer uses, and its playback gauges port straight over |
 | **Weather** | **Open-Meteo** — forecast **and** archive | No API key. Forecast for the planned ride; archive to retroactively label past trips with the conditions they happened in. Cached, frozen fallback |
 | **Roads / POIs** | **OSM** — Geofabrik extract + Overpass | Road class, geometry curvature, surface, junctions, forest, water, viewpoints. Fetched once. **Never called live during the demo** |
 | **Terrain** | **Copernicus DEM** (GLO-30) | Gradient, relief, ridges, and the western horizon test behind the sunset KPI. Tiles downloaded once |
@@ -57,9 +61,15 @@ the night gets eaten; `npm create vite` costs two minutes.
 ## Repo layout — one owner per directory
 
 ```
-precompute/    DuckDB SQL + runner   → data/cells.parquet, data/edges.parquet
-enrich/        OSM · DEM · land cover · accidents joins
-                                     → data/cells_enriched.parquet
+segments/      OSM extract → ways split at junctions, uniform ~200 m chainage
+                                     → data/segments.parquet, data/junctions.parquet
+precompute/    snap crowd trips → (segment, chainage), kernel aggregate,
+               measured junction delays
+                                     → data/segment_stats.parquet
+enrich/        DEM · land cover · accidents joins
+                                     → data/segments_enriched.parquet
+graph/         turn expansion: directed segments + permitted turns
+                                     → data/turn_graph.npz
 engine/        FastAPI: scoring, Dijkstra, joyride, profile + skill vector, learning
 web/           Vite + React dashboard
 fixtures/      frozen weather / OSM / DEM tiles / accidents / demo routes / map tiles
@@ -69,7 +79,8 @@ data/          generated artefacts (gitignored)
 
 | Directory | Owner |
 |---|---|
-| `precompute/` + `enrich/` | one owner |
+| `segments/` + `precompute/` + `enrich/` | one owner |
+| `graph/` | Krish (it is coupled to the search) |
 | `engine/` | Krish |
 | `web/` | one owner |
 
@@ -109,7 +120,7 @@ This is the unification that makes the ride-preview feature nearly free.
 - **Recorded** → `GET /trips/{id}/track` reads that trip's CSV through DuckDB.
   Real telemetry, real gauges.
 - **Planned** → `POST /route` returns the same shape, with `speed` and `lean`
-  filled from **crowd-predicted per-cell values** along the chosen path.
+  filled from **crowd-predicted per-segment values** along the chosen path.
 
 One renderer, one playback component, one set of gauges. So *"view the ride
 before you even go on it"* costs almost nothing, and most of the code is BMW's
@@ -123,12 +134,12 @@ own (`app.js` already has playback with lean/accel/speed gauges).
 GET  /riders                        A, B, C (+ any imported)
 GET  /riders/{id}/profile           weights, lean envelope, bike class, free-time histogram
 GET  /riders/{id}/trips             list + per-trip KPIs
-GET  /riders/{id}/coverage          visited level-14 cells → fog map
+GET  /riders/{id}/coverage          road-km ridden vs the network → fog map
 GET  /riders/{id}/skill             skill vector: current / ceiling / delta per dimension
 GET  /riders/{id}/learnings         progression series + records + next challenge
 GET  /riders/{id}/suggestions       cards for the Suggestions view
 POST /riders/import                 point at a folder of recordedTrips
-GET  /cells?bbox=&level=&metric=    crowd area-metrics layer
+GET  /segments?bbox=&metric=      crowd area-metrics layer
 GET  /trips/{id}/track              recorded Track
 POST /route                         {rider, from, to, start_time, alpha, budget} → 3 Tracks
 POST /joyride                       {rider, origin, hours, start_time, alpha}   → 3 Tracks

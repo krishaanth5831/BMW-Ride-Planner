@@ -29,8 +29,8 @@ The pitch is tomorrow morning. Ordered by value per hour of work:
 
 | # | Source | Tier | Verdict |
 |---|---|---|---|
-| 1 | **Open-Meteo** | must | No key, tiny payload, powers safety + the conditions dimension of learning |
-| 2 | **OSM (Overpass + extract)** | must | Road type, geometry curvature, surface, POIs. Unlocks scoring roads with zero crowd data |
+| 1 | **OSM (Geofabrik extract)** | **must — load-bearing** | Defines the segments and junctions everything is scored and routed on. Not optional any more: the crowd-transition fallback exists, but OSM is the design |
+| 2 | **Open-Meteo** | must | No key, tiny payload, powers safety + the conditions dimension of learning |
 | 3 | **Unfallatlas accidents** | high | One small download, and it is the strongest possible safety-criterion evidence |
 | 4 | **Copernicus DEM** | high | Gradient and relief; also fills the elevation gap where BMW's map-matched elevation is only 46% filled |
 | 5 | **CLMS land cover** | defer | OSM `landuse` covers most of it tonight; CLMS needs registration and a large raster |
@@ -40,53 +40,90 @@ The pitch is tomorrow morning. Ordered by value per hour of work:
 
 ## 1. OpenStreetMap
 
-**What we take:** `highway=*` road class · way geometry · `maxspeed` ·
-`surface` · junction nodes · `tunnel` / `bridge` · `landuse=forest` ·
-`natural=wood` · `natural=water` · `waterway` · `tourism=viewpoint` ·
-`highway=construction`.
+OSM is no longer an enrichment source — **it defines the unit of analysis.** Ways
+split at junctions *are* the segments everything else is scored on, and junction
+nodes *are* the graph nodes. See [ALGORITHM.md](ALGORITHM.md) §2 and §4.
 
-**Access:** two different mechanisms, for two different jobs.
-- **Geofabrik Bavaria extract** (`.osm.pbf`, ~600 MB) — the road network, parsed
-  once offline. Use `pyrosm` or `osmium`.
+**What we take:** `highway=*` road class · way geometry · junction nodes ·
+`maxspeed` · `surface` · `oneway` · turn-restriction relations ·
+`highway=traffic_signals` / `stop` / `give_way` · `tunnel` / `bridge` ·
+`landuse=forest` · `natural=wood` · `natural=water` · `waterway` ·
+`tourism=viewpoint` · `highway=construction`.
+
+**Access:** two mechanisms, for two different jobs.
+- **Geofabrik Bavaria extract** (`.osm.pbf`, ~600 MB) — the road network and
+  junction topology, parsed once offline. Use `pyrosm` or `osmium`. **This is
+  the one we need**, because Overpass will time out or rate-limit on a
+  whole-region query and we want every road once, not repeatedly at runtime.
 - **Overpass API** — POIs and area polygons for the demo bbox, fetched once into
   `fixtures/`. **Never called live during the demo.**
 
 **License:** ODbL. Attribution required — put "© OpenStreetMap contributors" in
 the UI footer. Do this; it costs one line and its absence is noticeable.
 
-### Why this is more than a nice-to-have
+### There is no curvature API
 
-**Geometric curvature is independent of lean data.** From way geometry we can
-compute heading change per metre directly:
+Worth stating plainly because it is a natural thing to go looking for: **no API
+returns road curvature as a field.** You fetch geometry and compute it yourself.
 
 ```
-curvature_geo(way) = Σ |Δbearing| / length_km
+# Overpass, if you want geometry for a small bbox
+[out:json][timeout:90];
+way["highway"~"^(motorway|trunk|primary|secondary|tertiary|unclassified)$"]
+   (47.4,10.8,48.6,12.0);
+out geom;
 ```
 
-That matters enormously, because it means we can score a road **that no BMW
-rider has ever ridden**. The crowd graph alone can only route where riders have
-been — this is the way out of that limitation (see the confidence blend in
-[ALGORITHM.md](ALGORITHM.md) §9).
+Then differentiate bearing along the polyline — formula and the **node-density
+trap** (resample to uniform 10–20 m spacing first, or you end up measuring how
+finely a human traced the road) in [ALGORITHM.md](ALGORITHM.md) §5.
 
-**It also upgrades the road graph itself.** The fallback design builds the
-network purely from observed crowd transitions. With an OSM extract we get real
-topology — every road, correctly connected, with one-ways and turn restrictions.
-The strong version is a **hybrid**: OSM supplies topology and completeness,
-crowd data supplies the quality scores on top. Build the crowd graph first
-because it has no download dependency, then layer OSM in.
+Commercial alternatives exist but are not overnight options: **HERE** sells ADAS
+road-geometry attributes including curvature, as licensed map data with a
+procurement conversation attached. Worth knowing that **Adam Franco's
+open-source `curvature` project** computes exactly this from OSM extracts,
+explicitly for motorcyclists — the obvious reference implementation to
+sanity-check our numbers against, and evidence the approach is well-trodden.
+
+Also note: **gradient is not in OSM either.** Elevation comes from the Copernicus
+DEM, sampled along the same resampled polyline.
+
+### Junction cost comes from the crowd, not from tags
+
+OSM tells us *where* the junctions are and what controls them. It does **not**
+tell us what they cost a rider. That number is measured from BMW's own trips —
+observed delay in seconds per junction per turn per time band — with the OSM
+tags as the fallback prior when crowd data is thin. Full mechanism and the
+fallback chain in [ALGORITHM.md](ALGORITHM.md) §4.
+
+### Why this is load-bearing
+
+**Geometric curvature is independent of lean data.** It means we can score a road
+**that no BMW rider has ever ridden** — the crowd data alone can only cover where
+riders have been. That is what the confidence blend in
+[ALGORITHM.md](ALGORITHM.md) §5 exists to exploit.
+
+**Topology is the other half.** Real junction structure gives us one-ways, turn
+restrictions and U-turn prevention, which the turn-expanded graph needs. A graph
+built purely from observed crowd transitions is the **fallback** (collapse chains
+of degree-2 nodes into polylines — no download needed), but OSM is the strong
+version.
 
 **Derived features:**
 
 | Feature | From | Feeds |
 |---|---|---|
-| `curvature_geo` | way geometry heading deltas | fun (where crowd data is thin) |
-| `junction_density` | junction nodes per km | flow — the brief's "clear road view" green flag |
+| `curvature_geo` | resampled way geometry, heading deltas | fun, where crowd data is thin |
+| **junction topology** | nodes of degree ≠ 2 | **the graph itself** — nodes and turn expansion |
+| **turn controls** | `traffic_signals` / `stop` / `give_way` | junction-cost fallback prior |
+| **turn restrictions** | `no_left_turn` relations | permitted-turn set |
+| `oneway` | tag | permitted-turn set |
 | `road_class` | `highway=*` | scenic penalty for motorway; "inner city" red flag |
-| `surface_quality` | `surface=asphalt/gravel/…` | risk; hard exclusion for `dirtRoads` when the rider forbids them |
+| `surface` | `surface=asphalt/gravel/…` | risk; hard exclusion when the rider forbids `dirtRoads` |
 | `maxspeed` | tag | the 50–120 km/h sweet-spot band |
-| `tunnel_share` | `tunnel=yes` | scenic penalty — no view in a tunnel |
-| `bridge`, `viewpoint`, `water_prox`, `forest_share` | tags and polygons | scenic |
-| `construction` | `highway=construction` | hard edge exclusion |
+| `tunnel` | `tunnel=yes` | scenic penalty — no view in a tunnel |
+| `bridge`, `viewpoint`, `water_prox`, `forest_share` | tags and polygons | scenic; wind risk on bridges |
+| `construction` | `highway=construction` | hard exclusion |
 
 BMW's own GPX route options (`dirtRoads`, `tunnels`, `ferries`, `tollRoads`,
 `motorways`, `borderCrossings` — see [DATASET.md](DATASET.md)) map almost
@@ -293,9 +330,9 @@ riders to a safe limit so he learns while being safe."*
 
 | Source | Key? | Tier | Primary contribution | Feeds |
 |---|---|---|---|---|
-| BMW crowd lake (85,699 trips) | — | static | lean, curviness, observed speed, ABS, congestion prior, **exposure denominator** | fun, risk, traffic, confidence |
-| BMW personal trips | — | static | revealed preference, lean envelope, skill vector | weights, ceilings, learning |
-| **OpenStreetMap** | no | static | road class, geometric curvature, surface, junctions, POIs | fun, scenic, risk, exclusions |
+| BMW crowd lake (85,699 trips) | — | static | lean, curviness, observed speed, ABS, congestion prior, **measured junction delay**, **exposure denominator** | fun, risk, traffic, junction cost, confidence |
+| BMW personal trips | — | static | revealed preference, style ratio, skill vector | weights, ceilings, learning |
+| **OpenStreetMap** | no | static | **segments + junction topology**, geometric curvature, surface, turn restrictions, POIs | the graph itself, fun, scenic, risk, exclusions |
 | **Copernicus DEM** | no | static | gradient, relief, ridges, **western horizon** | fun, scenic, sunset |
 | **CLMS land cover** | registration | static | forest / urban / water area fractions | scenic |
 | **Open-Meteo forecast** | no | dynamic | rain, temp, wind, visibility | risk, ceiling shrink |
