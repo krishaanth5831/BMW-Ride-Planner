@@ -334,3 +334,103 @@ if os.path.isdir(WEB):
         return FileResponse(os.path.join(WEB, "index.html"))
 
     app.mount("/static", StaticFiles(directory=WEB), name="static")
+
+
+# ---------------------------------------------------------------------------
+# The original morton-cell router (see MORTON_ROUTER.md). Served alongside the
+# segment planner rather than replacing it, so the two can be compared on the
+# same machine at /cells.
+# ---------------------------------------------------------------------------
+
+from engine import cell_router as _cells  # noqa: E402
+
+_cell_state: dict = {"graph": None}
+
+
+def get_cell_graph():
+    if _cell_state["graph"] is None:
+        path = os.path.join(DATA, "cell_graph.json")
+        if not os.path.exists(path):
+            raise HTTPException(
+                503,
+                "No crowd graph yet. Run:  python3 precompute/build_cell_graph.py",
+            )
+        _cell_state["graph"] = _cells.load(path)
+    return _cell_state["graph"]
+
+
+def _cost(g, lean_p95: float, weather: float = 0.0):
+    """A rider with no history yet: neutral weights, their own lean ceiling."""
+    return _cells.Cost(g, _cells.Rider(g, ridden=None, lean_p95=lean_p95), weather)
+
+
+@app.get("/api/cells/health")
+def cells_health():
+    g = get_cell_graph()
+    return {
+        "level": g.level,
+        "squares": len(g.cells),
+        "transitions": len(g.edges),
+        "branching_pct": round(100 * g.branching(), 1),
+        "region_speed_kmh": g.region_speed,
+    }
+
+
+@app.get("/api/cells/coverage")
+def cells_coverage(limit: int = 20000, min_trips: int = 3):
+    """Where the crowd actually is. This is the map -- there is no other one."""
+    g = get_cell_graph()
+    rows = [c for c in g.cells.values() if (c.get("n_trips") or 0) >= min_trips]
+    rows.sort(key=lambda c: -(c.get("n_trips") or 0))
+    step = max(1, len(rows) // max(limit, 1))
+    return {"total": len(rows), "points": [
+        [c["lat"], c["lon"], c["n_trips"], c.get("lean_p50") or 0]
+        for c in rows[::step][:limit]
+    ]}
+
+
+@app.post("/api/cells/route")
+def cells_route(body: dict):
+    """Mode 1: A -> B at three alphas, plus the squares the gate removed."""
+    g = get_cell_graph()
+    lean = float(body.get("lean_p95", 35.0))
+    cost = _cost(g, lean, float(body.get("weather", 0.0)))
+    start = g.nearest(*body["start"])
+    goal = g.nearest(*body["goal"])
+    if start is None or goal is None:
+        raise HTTPException(400, "could not snap those points to ridden squares")
+    routes = _cells.plan_destination(g, cost, start, goal)
+    excluded = sum(1 for c in g.cells.values() if cost.excluded(c))
+    return {
+        "start": [g.cells[start]["lat"], g.cells[start]["lon"]],
+        "goal": [g.cells[goal]["lat"], g.cells[goal]["lon"]],
+        "excluded_squares": excluded,
+        "lean_p95": lean,
+        "routes": [{k: r[k] for k in ("label", "alpha", "coords", "kpis")}
+                   for r in routes],
+    }
+
+
+@app.post("/api/cells/joyride")
+def cells_joyride(body: dict):
+    """Mode 2: X minutes from here, back to here."""
+    g = get_cell_graph()
+    lean = float(body.get("lean_p95", 35.0))
+    cost = _cost(g, lean, float(body.get("weather", 0.0)))
+    start = g.nearest(*body["origin"])
+    if start is None:
+        raise HTTPException(400, "could not snap that point to a ridden square")
+    loops = _cells.joyride(g, cost, start, float(body.get("minutes", 90)),
+                           alpha=float(body.get("alpha", 3.0)))
+    return {
+        "origin": [g.cells[start]["lat"], g.cells[start]["lon"]],
+        "routes": [{k: r[k] for k in
+                    ("label", "bearing", "overlap", "coords", "kpis")}
+                   for r in loops],
+    }
+
+
+if os.path.isdir(WEB):
+    @app.get("/cells")
+    def cells_page():
+        return FileResponse(os.path.join(WEB, "cells.html"))
