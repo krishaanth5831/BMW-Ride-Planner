@@ -23,6 +23,23 @@ from engine.router import Graph, plan_alternatives, plan_heatmap, plan_loop
 from engine.scoring import Scorer
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+
+def _load_env(path: str = None) -> None:
+    """Read .env without adding a dependency. Real environment always wins."""
+    path = path or os.path.join(ROOT, ".env")
+    if not os.path.exists(path):
+        return
+    with open(path) as fh:
+        for line in fh:
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            k, _, v = line.partition("=")
+            os.environ.setdefault(k.strip(), v.strip().strip("'\""))
+
+
+_load_env()
 DATA = os.path.join(ROOT, "data")
 WEB = os.path.join(ROOT, "web")
 DATASET = os.environ.get(
@@ -334,3 +351,215 @@ if os.path.isdir(WEB):
         return FileResponse(os.path.join(WEB, "index.html"))
 
     app.mount("/static", StaticFiles(directory=WEB), name="static")
+
+
+# ---------------------------------------------------------------------------
+# The original morton-cell router (see MORTON_ROUTER.md). Served alongside the
+# segment planner rather than replacing it, so the two can be compared on the
+# same machine at /cells.
+# ---------------------------------------------------------------------------
+
+from engine import cell_osm_router as _croads  # noqa: E402
+from engine import cell_router as _cells  # noqa: E402
+
+_cell_state: dict = {"graph": None, "roads": None}
+
+
+def get_cell_graph():
+    if _cell_state["graph"] is None:
+        path = os.path.join(DATA, "cell_graph.json")
+        if not os.path.exists(path):
+            raise HTTPException(
+                503,
+                "No crowd graph yet. Run:  python3 precompute/build_cell_graph.py",
+            )
+        _cell_state["graph"] = _cells.load(path)
+    return _cell_state["graph"]
+
+
+def get_road_graph():
+    """OSM geometry with morton-cell costs. Built once; ~3 s and ~66k segments."""
+    if _cell_state["roads"] is None:
+        path = os.path.join(DATA, "cell_graph.json")
+        if not os.path.exists(path):
+            raise HTTPException(
+                503,
+                "No crowd graph yet. Run:  python3 precompute/build_cell_graph.py",
+            )
+        _cell_state["roads"] = _croads.load(path)
+    return _cell_state["roads"]
+
+
+def _cost(g, lean_p95: float, weather: float = 0.0):
+    """A rider with no history yet: neutral weights, their own lean ceiling."""
+    return _cells.Cost(g, _cells.Rider(g, ridden=None, lean_p95=lean_p95), weather)
+
+
+@app.get("/api/cells/health")
+def cells_health():
+    g = get_cell_graph()
+    return {
+        "level": g.level,
+        "squares": len(g.cells),
+        "transitions": len(g.edges),
+        "branching_pct": round(100 * g.branching(), 1),
+        "region_speed_kmh": g.region_speed,
+    }
+
+
+@app.get("/api/cells/coverage")
+def cells_coverage(limit: int = 20000, min_trips: int = 3):
+    """Where the crowd actually is. This is the map -- there is no other one."""
+    g = get_cell_graph()
+    rows = [c for c in g.cells.values() if (c.get("n_trips") or 0) >= min_trips]
+    rows.sort(key=lambda c: -(c.get("n_trips") or 0))
+    step = max(1, len(rows) // max(limit, 1))
+    return {"total": len(rows), "points": [
+        [c["lat"], c["lon"], c["n_trips"], c.get("lean_p50") or 0]
+        for c in rows[::step][:limit]
+    ]}
+
+
+def _in_bbox(pt) -> bool:
+    s, w, n, e = _croads.BBOX
+    return s <= pt[0] <= n and w <= pt[1] <= e
+
+
+@app.post("/api/cells/route")
+def cells_route(body: dict):
+    """Mode 1: A -> B at three alphas.
+
+    `engine` picks where the line is DRAWN, not how it is scored. Both run the
+    identical distortion with the identical morton-cell terms:
+
+      "roads" (default) -- OSM geometry and connectivity, cell scores
+      "cells"           -- the pure lattice, square centres joined up
+    """
+    engine = body.get("engine", "roads")
+    lean = float(body.get("lean_p95", 35.0))
+    weather = float(body.get("weather", 0.0))
+    cg = get_cell_graph()
+    cost_cells = _cost(cg, lean, weather)
+
+    if engine == "cells":
+        start, goal = cg.nearest(*body["start"]), cg.nearest(*body["goal"])
+        if start is None or goal is None:
+            raise HTTPException(400, "could not snap those points to ridden squares")
+        routes = _cells.plan_destination(cg, cost_cells, start, goal)
+        snapped = ([cg.cells[start]["lat"], cg.cells[start]["lon"]],
+                   [cg.cells[goal]["lat"], cg.cells[goal]["lon"]])
+        keys = ("label", "alpha", "coords", "kpis")
+    else:
+        if not (_in_bbox(body["start"]) and _in_bbox(body["goal"])):
+            s, w, n, e = _croads.BBOX
+            raise HTTPException(
+                400,
+                f"Road routing covers {s}-{n} N, {w}-{e} E only -- the cached "
+                f"Overpass tiles. Widen it deliberately with "
+                f"`python3 -m precompute.fetch_osm --bbox ...`, not from a map "
+                f"click. Or switch to the cell engine, which covers everywhere "
+                f"the crowd rode.",
+            )
+        g = get_road_graph()
+        cost = _croads.RoadCost(g, cost_cells,
+                                escape=bool(body.get("escape", True)))
+        start, goal = (g.nearest_node(*body["start"]), g.nearest_node(*body["goal"]))
+        if start is None or goal is None:
+            raise HTTPException(400, "could not snap those points to a road")
+        routes = _croads.plan_destination(g, cost, start, goal)
+        snapped = (list(g.node_pos(start)), list(g.node_pos(goal)))
+        keys = ("label", "alpha", "coords", "kpis", "roads")
+
+    return {
+        "engine": engine,
+        "start": snapped[0],
+        "goal": snapped[1],
+        "excluded_squares": sum(1 for c in cg.cells.values() if cost_cells.excluded(c)),
+        "lean_p95": lean,
+        "routes": [{k: r[k] for k in keys} for r in routes],
+    }
+
+
+@app.post("/api/cells/joyride")
+def cells_joyride(body: dict):
+    """Mode 2: X minutes from here, back to here."""
+    engine = body.get("engine", "roads")
+    lean = float(body.get("lean_p95", 35.0))
+    minutes = float(body.get("minutes", 90))
+    alpha = float(body.get("alpha", 3.0))
+    cg = get_cell_graph()
+    cost_cells = _cost(cg, lean, float(body.get("weather", 0.0)))
+
+    if engine == "cells":
+        start = cg.nearest(*body["origin"])
+        if start is None:
+            raise HTTPException(400, "could not snap that point to a ridden square")
+        loops = _cells.joyride(cg, cost_cells, start, minutes, alpha=alpha)
+        origin = [cg.cells[start]["lat"], cg.cells[start]["lon"]]
+        keys = ("label", "bearing", "overlap", "coords", "kpis")
+    else:
+        if not _in_bbox(body["origin"]):
+            raise HTTPException(400, "origin is outside the cached road tiles")
+        g = get_road_graph()
+        start = g.nearest_node(*body["origin"])
+        cost = _croads.RoadCost(g, cost_cells,
+                                escape=bool(body.get("escape", True)))
+        loops = _croads.joyride(g, cost, start, minutes, alpha=alpha)
+        origin = list(g.node_pos(start))
+        keys = ("label", "bearing", "overlap", "coords", "kpis", "roads",
+                "value_thirds", "urban_share", "turnaround_urban",
+                "escaped_town")
+
+    out = {"engine": engine, "origin": origin,
+           "routes": [{k: r[k] for k in keys} for r in loops]}
+    if engine != "cells":
+        out["origin_urban"] = round(get_road_graph().urban_of_node(start), 2)
+    return out
+
+
+@app.get("/api/mapconfig")
+def mapconfig():
+    """Tile keys for the page.
+
+    They live in .env, not in the committed HTML, and are read at request time
+    so adding one needs no rebuild. Every keyed layer has a keyless fallback,
+    so an absent or expired key degrades the basemap instead of breaking it.
+    """
+    stadia = os.environ.get("STADIA_API_KEY", "")
+    geoapify = os.environ.get("GEOAPIFY_API_KEY", "")
+    layers = []
+    if stadia:
+        layers += [
+            {"id": "outdoors", "name": "Outdoors",
+             "url": "https://tiles.stadiamaps.com/tiles/outdoors/{z}/{x}/{y}{r}.png?api_key=" + stadia,
+             "attribution": "&copy; Stadia Maps &copy; OpenMapTiles &copy; OpenStreetMap",
+             "dark": False},
+            {"id": "terrain", "name": "Terrain",
+             "url": "https://tiles.stadiamaps.com/tiles/stamen_terrain/{z}/{x}/{y}{r}.png?api_key=" + stadia,
+             "attribution": "&copy; Stadia Maps &copy; Stamen Design &copy; OpenStreetMap",
+             "dark": False},
+            {"id": "dark", "name": "Dark",
+             "url": "https://tiles.stadiamaps.com/tiles/alidade_smooth_dark/{z}/{x}/{y}{r}.png?api_key=" + stadia,
+             "attribution": "&copy; Stadia Maps &copy; OpenMapTiles &copy; OpenStreetMap",
+             "dark": True},
+        ]
+    if geoapify:
+        layers.append(
+            {"id": "geoapify-dark", "name": "Dark (Geoapify)",
+             "url": "https://maps.geoapify.com/v1/tile/dark-matter/{z}/{x}/{y}.png?apiKey=" + geoapify,
+             "attribution": "&copy; Geoapify &copy; OpenMapTiles &copy; OpenStreetMap",
+             "dark": True})
+    layers += [
+        {"id": "carto", "name": "Dark (CARTO)",
+         "url": "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
+         "attribution": "&copy; OpenStreetMap &copy; CARTO", "dark": True},
+        {"id": "osm", "name": "OSM", "url": "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
+         "attribution": "&copy; OpenStreetMap contributors", "dark": False},
+    ]
+    return {"layers": layers, "default": layers[0]["id"]}
+
+
+if os.path.isdir(WEB):
+    @app.get("/cells")
+    def cells_page():
+        return FileResponse(os.path.join(WEB, "cells.html"))
