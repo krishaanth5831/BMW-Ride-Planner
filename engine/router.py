@@ -24,6 +24,7 @@ from collections import defaultdict
 # time and cannot blow up into absurd detours.
 TURN_ATTENTION_S = 5.0
 JUNCTION_DEGREE_S = 3.0
+MOTORWAY_TYPES = {"motorway", "motorway_link"}
 
 
 def bearing_deg(a, b) -> float:
@@ -76,9 +77,10 @@ class Graph:
 
     # ------------------------------------------------------------------
     def dijkstra(self, start: int, scorer, alpha: float, *, goal=None,
-                 weather: float = 0.0, weather_factor: float = 1.0,
-                 max_seconds=None, avoid=None):
+             weather: float = 0.0, weather_factor: float = 1.0,
+             max_seconds=None, avoid=None, blocked_highway_types=None):
         avoid = avoid or set()
+        blocked_highway_types = blocked_highway_types or set()
         dist = {start: 0.0}
         elapsed = {start: 0.0}
         prev_seg: dict[int, int] = {}
@@ -94,6 +96,8 @@ class Graph:
                 if seg_id == via:
                     continue            # no immediate doubling back
                 seg = self.by_id[seg_id]
+                if seg.get("highway") in blocked_highway_types:
+                    continue
                 if not self.traversable(seg, node):
                     continue
                 if scorer.excluded(seg, weather_factor):
@@ -231,38 +235,80 @@ def _target_duration(graph, scorer, plan_fn, minutes: float, tol: float = 0.12):
 
 def plan_ab(graph: Graph, scorer, start: int, goal: int, minutes: float | None,
             weather: float = 0.0, weather_factor: float = 1.0, k: int = 3):
-    """A -> B. Three options across alpha, plus duration targeting if asked."""
-    def one(alpha: float):
-        _d, ps, pn, _el = graph.dijkstra(start, scorer, alpha, goal=goal,
-                                         weather=weather, weather_factor=weather_factor)
+    """A -> B with motorway-free scenic routes whenever possible."""
+
+    def one(alpha: float, *, avoid_motorways: bool = False):
+        blocked = MOTORWAY_TYPES if avoid_motorways else None
+
+        _d, ps, pn, _el = graph.dijkstra(
+            start,
+            scorer,
+            alpha,
+            goal=goal,
+            weather=weather,
+            weather_factor=weather_factor,
+            blocked_highway_types=blocked,
+        )
+
         segs = graph.path_segments(ps, pn, start, goal)
         if not segs:
             return None
-        r = build_route(graph, scorer, segs, start)
-        r["alpha"] = round(alpha, 2)
-        return r
 
+        route = build_route(graph, scorer, segs, start)
+        route["alpha"] = round(alpha, 2)
+        route["motorway_fallback"] = False
+        return route
+
+    def scenic_one(alpha: float):
+        # First attempt: motorways are completely forbidden.
+        route = one(alpha, avoid_motorways=True)
+        if route is not None:
+            return route
+
+        # Fallback: allow motorways only when no motorway-free route exists.
+        route = one(alpha, avoid_motorways=False)
+        if route is not None:
+            route["motorway_fallback"] = True
+        return route
+
+    # The fastest option is still allowed to use motorways.
     fastest = one(0.0)
     if fastest is None:
         return []
+
     out = [dict(fastest, label="Fastest")]
 
     def add(route, label):
-        # Never show the same path twice under two names.
-        if route and all(route["seg_ids"] != o["seg_ids"] for o in out):
-            out.append(dict(route, label=label))
+        if not route:
+            return
+
+        # Do not display the same route under multiple names.
+        if any(route["seg_ids"] == existing["seg_ids"] for existing in out):
+            return
+
+        if route.get("motorway_fallback"):
+            label += " (motorway required)"
+
+        out.append(dict(route, label=label))
 
     if minutes:
-        found = _target_duration(graph, scorer, one, minutes)
+        found = _target_duration(graph, scorer, scenic_one, minutes)
         if found:
-            got, _alpha, route = found
-            # Only claim we hit the target if we actually did. A->B cannot
-            # inflate a 19 km trip to two hours: Dijkstra returns the best path,
-            # it does not detour to burn time. Say so rather than mislabel it.
-            within = abs(got - minutes) <= 0.2 * minutes
-            add(route, f"Scenic ~{int(got)} min" if within else "Scenic")
-    for a, lab in ((3.0, "More scenic"), (8.0, "Most scenic")):
-        add(one(a), lab)
+            achieved_minutes, _alpha, route = found
+            within = abs(achieved_minutes - minutes) <= 0.2 * minutes
+            label = (
+                f"Scenic ~{int(achieved_minutes)} min"
+                if within
+                else "Scenic"
+            )
+            add(route, label)
+
+    for alpha, label in (
+        (3.0, "More scenic"),
+        (8.0, "Most scenic"),
+    ):
+        add(scenic_one(alpha), label)
+
     return out[:max(k, 2)]
 
 
