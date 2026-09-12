@@ -23,6 +23,23 @@ from engine.router import Graph, plan_alternatives, plan_heatmap, plan_loop
 from engine.scoring import Scorer
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+
+def _load_env(path: str = None) -> None:
+    """Read .env without adding a dependency. Real environment always wins."""
+    path = path or os.path.join(ROOT, ".env")
+    if not os.path.exists(path):
+        return
+    with open(path) as fh:
+        for line in fh:
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            k, _, v = line.partition("=")
+            os.environ.setdefault(k.strip(), v.strip().strip("'\""))
+
+
+_load_env()
 DATA = os.path.join(ROOT, "data")
 WEB = os.path.join(ROOT, "web")
 DATASET = os.environ.get(
@@ -491,6 +508,48 @@ def cells_joyride(body: dict):
 
     return {"engine": engine, "origin": origin,
             "routes": [{k: r[k] for k in keys} for r in loops]}
+
+
+@app.get("/api/mapconfig")
+def mapconfig():
+    """Tile keys for the page.
+
+    They live in .env, not in the committed HTML, and are read at request time
+    so adding one needs no rebuild. Every keyed layer has a keyless fallback,
+    so an absent or expired key degrades the basemap instead of breaking it.
+    """
+    stadia = os.environ.get("STADIA_API_KEY", "")
+    geoapify = os.environ.get("GEOAPIFY_API_KEY", "")
+    layers = []
+    if stadia:
+        layers += [
+            {"id": "outdoors", "name": "Outdoors",
+             "url": "https://tiles.stadiamaps.com/tiles/outdoors/{z}/{x}/{y}{r}.png?api_key=" + stadia,
+             "attribution": "&copy; Stadia Maps &copy; OpenMapTiles &copy; OpenStreetMap",
+             "dark": False},
+            {"id": "terrain", "name": "Terrain",
+             "url": "https://tiles.stadiamaps.com/tiles/stamen_terrain/{z}/{x}/{y}{r}.png?api_key=" + stadia,
+             "attribution": "&copy; Stadia Maps &copy; Stamen Design &copy; OpenStreetMap",
+             "dark": False},
+            {"id": "dark", "name": "Dark",
+             "url": "https://tiles.stadiamaps.com/tiles/alidade_smooth_dark/{z}/{x}/{y}{r}.png?api_key=" + stadia,
+             "attribution": "&copy; Stadia Maps &copy; OpenMapTiles &copy; OpenStreetMap",
+             "dark": True},
+        ]
+    if geoapify:
+        layers.append(
+            {"id": "geoapify-dark", "name": "Dark (Geoapify)",
+             "url": "https://maps.geoapify.com/v1/tile/dark-matter/{z}/{x}/{y}.png?apiKey=" + geoapify,
+             "attribution": "&copy; Geoapify &copy; OpenMapTiles &copy; OpenStreetMap",
+             "dark": True})
+    layers += [
+        {"id": "carto", "name": "Dark (CARTO)",
+         "url": "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
+         "attribution": "&copy; OpenStreetMap &copy; CARTO", "dark": True},
+        {"id": "osm", "name": "OSM", "url": "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
+         "attribution": "&copy; OpenStreetMap contributors", "dark": False},
+    ]
+    return {"layers": layers, "default": layers[0]["id"]}
 
 
 if os.path.isdir(WEB):

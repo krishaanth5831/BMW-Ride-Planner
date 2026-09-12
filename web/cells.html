@@ -37,6 +37,14 @@
   .kpi b { color:var(--ink); font-weight:600; font-variant-numeric:tabular-nums; }
   .note { font-size:11.5px; color:var(--dim); margin-top:12px; line-height:1.5; }
   .warn { color:#ffb4a2; }
+  select { width:100%; padding:7px 8px; border-radius:7px; background:#1d222a;
+           color:var(--ink); border:1px solid var(--line); font-size:13px; }
+  #mapstatus { display:none; margin-top:8px; color:#ffb4a2; }
+  /* Route colours are tuned for a dark basemap; on a light one they need a
+     casing to stay readable over terrain shading. */
+  body.lightmap .leaflet-overlay-pane path { paint-order:stroke;
+       stroke-linejoin:round; }
+  body.lightmap .leaflet-overlay-pane { filter:drop-shadow(0 0 2px rgba(0,0,0,.55)); }
 </style>
 
 <div id="side">
@@ -44,6 +52,12 @@
   <div class="sub">The original algorithm. The crowd is the map.</div>
 
   <div id="stats"></div>
+
+  <fieldset>
+    <legend>Basemap</legend>
+    <select id="basemap"></select>
+    <div class="note" id="mapstatus"></div>
+  </fieldset>
 
   <fieldset>
     <legend>The rider</legend>
@@ -85,8 +99,61 @@
 <script>
 const COLORS = ['#4da3ff', '#ffc14d', '#ff5d73'];
 const map = L.map('map', { zoomControl: true }).setView([47.95, 11.45], 10);
-L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
-  { maxZoom: 19, attribution: '&copy; OpenStreetMap &copy; CARTO' }).addTo(map);
+
+// Basemap with automatic fallback. A tile key can be absent, expired, or
+// Referer-scoped to an origin this page is not served from -- in every one of
+// those cases the tiles just silently fail to paint and the map looks broken.
+// So: try each layer in order, and if one throws enough tile errors to be
+// clearly dead, drop to the next. The last two need no key at all, so there is
+// always something to draw.
+let base = null, layerDefs = [], layerIdx = 0;
+
+function useLayer(i, manual) {
+  if (i >= layerDefs.length) return;
+  layerIdx = i;
+  const def = layerDefs[i];
+  if (base) map.removeLayer(base);
+  let errors = 0;
+  base = L.tileLayer(def.url, {
+    maxZoom: 19, attribution: def.attribution, crossOrigin: true
+  });
+  base.on('tileerror', () => {
+    // A handful of misses is normal at the edge of coverage; a dead key fails
+    // every tile at once.
+    if (++errors === 6 && !manual && i + 1 < layerDefs.length) {
+      setStatus(`${def.name} tiles failed — falling back to ${layerDefs[i + 1].name}`);
+      useLayer(i + 1);
+    }
+  });
+  base.addTo(map);
+  base.bringToBack();
+  document.body.classList.toggle('lightmap', !def.dark);
+  if (coveragePoints.length) drawCoverage();
+  const sel = $('basemap');
+  if (sel) sel.value = def.id;
+}
+
+// Coverage has to be recoloured per basemap: a pale green that reads well on
+// a dark tile disappears completely into terrain shading on the light ones.
+let coveragePoints = [];
+
+function drawCoverage() {
+  layers.coverage.clearLayers();
+  const dark = layerDefs[layerIdx] ? layerDefs[layerIdx].dark : true;
+  const color = dark ? '#5ad1a0' : '#0a6b4a';
+  for (const [lat, lon, trips] of coveragePoints) {
+    L.circleMarker([lat, lon], {
+      radius: dark ? 1.6 : 1.9, weight: 0, fillColor: color,
+      fillOpacity: Math.min((dark ? 0.12 : 0.30) + trips / 60, dark ? 0.65 : 0.85),
+      interactive: false
+    }).addTo(layers.coverage);
+  }
+}
+
+function setStatus(msg) {
+  const el = $('mapstatus');
+  if (el) { el.textContent = msg || ''; el.style.display = msg ? 'block' : 'none'; }
+}
 
 const layers = { coverage: L.layerGroup().addTo(map), routes: L.layerGroup().addTo(map),
                  pins: L.layerGroup().addTo(map) };
@@ -107,6 +174,21 @@ async function j(url, body) {
 
 (async function boot() {
   try {
+    const mc = await j('/api/mapconfig');
+    layerDefs = mc.layers;
+    $('basemap').innerHTML = layerDefs
+      .map(l => `<option value="${l.id}">${l.name}</option>`).join('');
+    $('basemap').onchange = e =>
+      useLayer(layerDefs.findIndex(l => l.id === e.target.value), true);
+    useLayer(0);
+  } catch (e) {
+    layerDefs = [{ id: 'osm', name: 'OSM',
+      url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+      attribution: '&copy; OpenStreetMap contributors', dark: false }];
+    useLayer(0);
+    setStatus('Map config unavailable — using plain OpenStreetMap.');
+  }
+  try {
     const h = await j('/api/cells/health');
     $('stats').innerHTML = [
       ['Ridden squares', h.squares.toLocaleString()],
@@ -119,12 +201,8 @@ async function j(url, body) {
       so little, and it is the argument for scoring road segments instead.`;
 
     const c = await j('/api/cells/coverage?limit=14000&min_trips=3');
-    for (const [lat, lon, trips] of c.points) {
-      L.circleMarker([lat, lon], {
-        radius: 1.6, weight: 0, fillOpacity: Math.min(0.12 + trips / 60, 0.65),
-        fillColor: '#5ad1a0', interactive: false
-      }).addTo(layers.coverage);
-    }
+    coveragePoints = c.points;
+    drawCoverage();
   } catch (e) {
     $('stats').innerHTML = `<div class="note warn">${e.message}</div>`;
   }
@@ -161,7 +239,9 @@ function draw(routes, extra) {
   const cards = [];
   routes.forEach((r, i) => {
     const color = COLORS[i % 3];
-    L.polyline(r.coords, { color, weight: 4, opacity: 0.9 }).addTo(layers.routes);
+    L.polyline(r.coords, { color: '#0d0f12', weight: 7, opacity: 0.5 })
+      .addTo(layers.routes);
+    L.polyline(r.coords, { color, weight: 4, opacity: 0.95 }).addTo(layers.routes);
     const k = r.kpis;
     cards.push(`<div class="card">
       <b><span class="swatch" style="background:${color}"></span>${r.label}</b>
