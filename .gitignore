@@ -1,0 +1,49 @@
+# Dependencies
+node_modules/
+.pnp/
+.pnp.js
+vendor/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+env/
+*.egg-info/
+.pytest_cache/
+
+# Builds
+dist/
+build/
+out/
+.next/
+target/
+
+# Environment / secrets — NEVER commit API keys
+.env
+.env.*
+!.env.example
+*.pem
+credentials.json
+secrets.*
+
+# Logs
+*.log
+npm-debug.log*
+yarn-error.log*
+logs/
+runs/
+
+# Editors & OS
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+
+# Data / scratch
+*.sqlite
+*.db
+tmp/
+scratch/
