@@ -1,7 +1,14 @@
-"""Dijkstra over the segment graph, plus the joyride loop builder.
+"""Dijkstra over the OSM segment graph, with both ride modes.
 
-plan/ALGORITHM.md section 10. One search, used four times for the loop -- there
-is no second engine.
+  * Destination (A -> B): plain Dijkstra, alpha binary-searched to hit the
+    requested duration.
+  * Round trip: one Dijkstra used four times -- flood out, take the ring at
+    half the budget, spread turnarounds across bearings, route back with a
+    reuse penalty (BMW's own `alreadyUsedRoads`).
+
+Because the graph is real OSM way geometry, a route cannot leave the road
+network. The previous crowd-only graph joined cell centroids with straight
+lines, which is why routes cut across open land.
 """
 
 from __future__ import annotations
@@ -10,53 +17,67 @@ import heapq
 import math
 from collections import defaultdict
 
-from precompute.build_graph import node_center
-
 # A junction only costs you if you stop or turn. Passing a side road on
-# priority is free -- which is what stops "fewest junctions" from silently
-# becoming a motorway-seeking objective. These are the tag-free fallback priors,
-# in SECONDS, so they stay commensurate with travel time and cannot blow up into
-# absurd detours (plan/ALGORITHM.md section 4, Fix 1 and Fix 2).
-TURN_ATTENTION_S = 5.0      # any junction where the road you are on changes
-JUNCTION_DEGREE_S = 3.0     # per extra branch: a proxy for control complexity
+# priority is free -- which is what stops "fewest junctions" from quietly
+# becoming a motorway-seeking objective, since motorways have almost no
+# at-grade junctions. Values are SECONDS, so they stay commensurate with travel
+# time and cannot blow up into absurd detours.
+TURN_ATTENTION_S = 5.0
+JUNCTION_DEGREE_S = 3.0
+
+
+def bearing_deg(a, b) -> float:
+    lat1, lon1, lat2, lon2 = map(math.radians, (*a, *b))
+    dlon = lon2 - lon1
+    y = math.sin(dlon) * math.cos(lat2)
+    x = (math.cos(lat1) * math.sin(lat2)
+         - math.sin(lat1) * math.cos(lat2) * math.cos(dlon))
+    return (math.degrees(math.atan2(y, x)) + 360) % 360
 
 
 class Graph:
     def __init__(self, segments: list[dict], adjacency: dict):
         self.segments = segments
         self.by_id = {s["seg_id"]: s for s in segments}
-        self.adj: dict[int, list[int]] = {int(k): v for k, v in adjacency.items()}
+        self.adj = {int(k): v for k, v in adjacency.items()}
         self.degree = {n: len(v) for n, v in self.adj.items()}
+        self._node_pos: dict[int, tuple[float, float]] = {}
+        for s in segments:
+            g = s["geometry"]
+            self._node_pos.setdefault(s["node_a"], (g[0][0], g[0][1]))
+            self._node_pos.setdefault(s["node_b"], (g[-1][0], g[-1][1]))
+
+    def node_pos(self, node: int):
+        return self._node_pos.get(node, (0.0, 0.0))
 
     def other_end(self, seg: dict, node: int) -> int:
         return seg["node_b"] if node == seg["node_a"] else seg["node_a"]
 
+    def traversable(self, seg: dict, from_node: int) -> bool:
+        """Respect one-ways: an oneway segment is only usable a -> b."""
+        if seg.get("oneway") and from_node != seg["node_a"]:
+            return False
+        return True
+
     def junction_cost(self, node: int, turning: bool) -> float:
-        """Measured delay would go here; this is the documented fallback prior."""
         if not turning:
             return 0.0
-        extra = max(0, self.degree.get(node, 2) - 2)
-        return TURN_ATTENTION_S + JUNCTION_DEGREE_S * extra
+        return TURN_ATTENTION_S + JUNCTION_DEGREE_S * max(0, self.degree.get(node, 2) - 2)
 
-    def nearest_node(self, lat: float, lon: float) -> int | None:
+    def nearest_node(self, lat: float, lon: float, require_degree: int = 1):
         best, best_d = None, float("inf")
-        for node in self.adj:
-            nlat, nlon = node_center(node)
+        for node, (nlat, nlon) in self._node_pos.items():
+            if self.degree.get(node, 0) < require_degree:
+                continue
             d = (nlat - lat) ** 2 + ((nlon - lon) * math.cos(math.radians(lat))) ** 2
             if d < best_d:
                 best, best_d = node, d
         return best
 
     # ------------------------------------------------------------------
-    def dijkstra(self, start: int, scorer, alpha: float, *, goal: int | None = None,
-                 w_growth: float = 0.0, weather: float = 0.0,
-                 max_seconds: float | None = None,
-                 avoid: set[int] | None = None, weather_factor: float = 1.0):
-        """Cheapest-first expansion. Returns (dist, prev_seg, prev_node, elapsed).
-
-        `dist` is in *cost* units; `elapsed` tracks real seconds so a time
-        budget can be read off directly.
-        """
+    def dijkstra(self, start: int, scorer, alpha: float, *, goal=None,
+                 weather: float = 0.0, weather_factor: float = 1.0,
+                 max_seconds=None, avoid=None):
         avoid = avoid or set()
         dist = {start: 0.0}
         elapsed = {start: 0.0}
@@ -70,20 +91,20 @@ class Graph:
             if goal is not None and node == goal:
                 break
             for seg_id in self.adj.get(node, ()):
-                seg = self.by_id[seg_id]
                 if seg_id == via:
-                    continue  # no immediate U-turn back down the same segment
+                    continue            # no immediate doubling back
+                seg = self.by_id[seg_id]
+                if not self.traversable(seg, node):
+                    continue
                 if scorer.excluded(seg, weather_factor):
                     continue
                 nxt = self.other_end(seg, node)
                 if nxt == node:
                     continue
-                pen = 1.0 if seg_id in avoid else 0.0
-                turning = via != -1
-                jc = self.junction_cost(node, turning)
-                step = scorer.cost(seg, alpha, w_growth=w_growth, weather=weather,
-                                   junction_s=jc)
-                step += pen * scorer.seconds(seg) * 4.0  # reuse penalty
+                jc = self.junction_cost(node, via != -1)
+                step = scorer.cost(seg, alpha, weather=weather, junction_s=jc)
+                if seg_id in avoid:
+                    step += scorer.seconds(seg) * 4.0
                 nd = d + step
                 ne = elapsed[node] + scorer.seconds(seg) + jc
                 if max_seconds is not None and ne > max_seconds:
@@ -96,169 +117,214 @@ class Graph:
                     heapq.heappush(heap, (nd, nxt, seg_id))
         return dist, prev_seg, prev_node, elapsed
 
-    def path_segments(self, prev_seg, prev_node, start: int, end: int) -> list[int]:
-        out: list[int] = []
-        cur = end
-        guard = 0
-        while cur != start and cur in prev_seg and guard < 100_000:
+    def path_segments(self, prev_seg, prev_node, start, end):
+        out, cur, guard = [], end, 0
+        while cur != start and cur in prev_seg and guard < 200_000:
             out.append(prev_seg[cur])
             cur = prev_node[cur]
             guard += 1
         out.reverse()
-        return out
+        return out if cur == start else []
 
 
-def bearing(a: tuple[float, float], b: tuple[float, float]) -> float:
-    lat1, lon1, lat2, lon2 = map(math.radians, (*a, *b))
-    dlon = lon2 - lon1
-    y = math.sin(dlon) * math.cos(lat2)
-    x = math.cos(lat1) * math.sin(lat2) - math.sin(lat1) * math.cos(lat2) * math.cos(dlon)
-    return (math.degrees(math.atan2(y, x)) + 360) % 360
-
-
-def build_route(graph: Graph, scorer, seg_ids: list[int], origin: int) -> dict:
-    """Assemble a Track: ordered geometry, KPIs, and the explanation payload."""
+# ----------------------------------------------------------------------
+def build_route(graph: Graph, scorer, seg_ids, origin: int) -> dict:
     coords: list[list[float]] = []
     node = origin
-    total_m = total_s = 0.0
-    ridden_m = 0.0          # distance summed over traversals, for invariant ratios
+    total_m = total_s = ridden_m = 0.0
     lean_delta = leaned_m = abs_events = 0.0
+    scenic_w = risk_w = conf_w = 0.0
+    junctions = 0
     elev: list[float] = []
-    speeds: list[float] = []
-    per_seg = []
-    junctions = 0     # real junctions passed, i.e. nodes of degree != 2
+    names: list[str] = []
+    covered_m = 0.0
+
     for sid in seg_ids:
         seg = graph.by_id[sid]
         geom = seg["geometry"]
-        # Orient each polyline so the route reads start-to-finish.
         if node == seg["node_b"]:
             geom = list(reversed(geom))
         if coords and coords[-1] == [geom[0][0], geom[0][1]]:
             geom = geom[1:]
         coords.extend([[p[0], p[1]] for p in geom])
-        total_m += seg["length_m"]
-        ridden_m += seg["path_m"] or 0.0
+
+        L = float(seg["length_m"])
+        total_m += L
         total_s += scorer.seconds(seg)
-        lean_delta += seg["lean_delta"] or 0
-        leaned_m += seg["leaned_m"] or 0
-        abs_events += seg["abs_events"] or 0
+        ridden_m += float(seg.get("path_m") or 0.0)
+        lean_delta += float(seg.get("lean_delta") or 0.0)
+        leaned_m += float(seg.get("leaned_m") or 0.0)
+        abs_events += float(seg.get("abs_events") or 0.0)
+        # Length-weighted, so a long motorway stretch cannot hide behind a short
+        # pretty lane.
+        scenic_w += scorer.scenic(seg) * L
+        risk_w += scorer.risk(seg) * L
+        conf_w += scorer.confidence(seg) * L
+        if seg.get("n_trips"):
+            covered_m += L
         if seg.get("elev_mean"):
-            elev.append(seg["elev_mean"])
-        if seg.get("speed_mean"):
-            speeds.append(seg["speed_mean"])
-        k = scorer.kpis(seg)
-        per_seg.append({"seg_id": sid, **k})
+            elev.append(float(seg["elev_mean"]))
+        if seg.get("name"):
+            names.append(seg["name"])
         node = graph.other_end(seg, node)
-        # Only count a junction where the rider actually has a choice to make.
-        # Counting segment boundaries instead would inflate this badly, since a
-        # long road is many segments with no junction between them.
         if graph.degree.get(node, 2) != 2:
             junctions += 1
 
+    elev_gain = sum(max(0.0, elev[i] - elev[i - 1]) for i in range(1, len(elev)))
     km = max(total_m / 1000.0, 1e-6)
-    elev_gain = 0.0
-    for i in range(1, len(elev)):
-        if elev[i] > elev[i - 1]:
-            elev_gain += elev[i] - elev[i - 1]
+    denom = max(total_m, 1e-6)
 
-    n = max(len(per_seg), 1)
+    # Named roads, most-travelled first -- so the UI can say "via the B11".
+    seen: dict[str, float] = defaultdict(float)
+    for sid in seg_ids:
+        s = graph.by_id[sid]
+        if s.get("name"):
+            seen[s["name"]] += float(s["length_m"])
+    via = [n for n, _ in sorted(seen.items(), key=lambda kv: -kv[1])[:5]]
+
     return {
         "coords": coords,
         "seg_ids": seg_ids,
+        "via": via,
         "kpis": {
             "km": round(km, 1),
             "minutes": round(total_s / 60.0, 1),
-            # trip-count invariant: both sides summed over the same traversals
-            "curviness": round(lean_delta / max(ridden_m / 1000.0, 1e-6), 1),
+            "scenic": round(scenic_w / denom, 3),
+            "risk": round(risk_w / denom, 3),
+            "confidence": round(conf_w / denom, 3),
+            "crowd_covered_pct": round(100 * covered_m / denom, 0),
+            "curviness": round(lean_delta / max(ridden_m / 1000.0, 1e-6), 1) if ridden_m else 0.0,
             "leaned_share": round(leaned_m / ridden_m, 3) if ridden_m else 0.0,
             "elev_gain_m": round(elev_gain, 0),
-            "avg_speed_kmh": round(sum(speeds) / len(speeds), 1) if speeds else 0.0,
-            "abs_per_100km": round(abs_events / max(ridden_m / 100_000.0, 1e-6), 1),
             "junctions": junctions,
-            "fun": round(sum(p["fun"] for p in per_seg) / n, 3),
-            "scenic": round(sum(p["scenic"] for p in per_seg) / n, 3),
-            "risk": round(sum(p["risk"] for p in per_seg) / n, 3),
-            "growth": round(sum(p["growth"] for p in per_seg) / n, 3),
-            "confidence": round(sum(p["confidence"] for p in per_seg) / n, 3),
+            "segments": len(seg_ids),
         },
-        "per_segment": per_seg,
     }
 
 
-def joyride(graph: Graph, scorer, origin_node: int, minutes: float,
-            alpha: float = 3.0, weather: float = 0.0, weather_factor: float = 1.0,
-            k_options: int = 3) -> list[dict]:
-    """X hours from here, back to here. Four calls to the same Dijkstra.
+def _target_duration(graph, scorer, plan_fn, minutes: float, tol: float = 0.12):
+    """Binary-search alpha so the route lands near the requested duration.
 
-    1. flood out from the origin -> travel time everywhere
-    2. take the ring at about half the budget
-    3. pick turnarounds spread across bearings, so the options genuinely differ
-    4. route out, then route back with a reuse penalty (BMW's own
-       `alreadyUsedRoads`), and rank the completed loops
+    Higher alpha buys a more scenic, longer route. Duration steps rather than
+    curving smoothly because paths are discrete, so this is a search for a good
+    enough alpha, not an exact solve.
     """
+    lo, hi = 0.0, 12.0
+    best = None
+    for _ in range(7):
+        mid = (lo + hi) / 2
+        got = plan_fn(mid)
+        if not got:
+            hi = mid
+            continue
+        mins = got["kpis"]["minutes"]
+        if best is None or abs(mins - minutes) < abs(best[0] - minutes):
+            best = (mins, mid, got)
+        if abs(mins - minutes) <= tol * minutes:
+            break
+        if mins < minutes:
+            lo = mid
+        else:
+            hi = mid
+    return best
+
+
+def plan_ab(graph: Graph, scorer, start: int, goal: int, minutes: float | None,
+            weather: float = 0.0, weather_factor: float = 1.0, k: int = 3):
+    """A -> B. Three options across alpha, plus duration targeting if asked."""
+    def one(alpha: float):
+        _d, ps, pn, _el = graph.dijkstra(start, scorer, alpha, goal=goal,
+                                         weather=weather, weather_factor=weather_factor)
+        segs = graph.path_segments(ps, pn, start, goal)
+        if not segs:
+            return None
+        r = build_route(graph, scorer, segs, start)
+        r["alpha"] = round(alpha, 2)
+        return r
+
+    fastest = one(0.0)
+    if fastest is None:
+        return []
+    out = [dict(fastest, label="Fastest")]
+
+    def add(route, label):
+        # Never show the same path twice under two names.
+        if route and all(route["seg_ids"] != o["seg_ids"] for o in out):
+            out.append(dict(route, label=label))
+
+    if minutes:
+        found = _target_duration(graph, scorer, one, minutes)
+        if found:
+            got, _alpha, route = found
+            # Only claim we hit the target if we actually did. A->B cannot
+            # inflate a 19 km trip to two hours: Dijkstra returns the best path,
+            # it does not detour to burn time. Say so rather than mislabel it.
+            within = abs(got - minutes) <= 0.2 * minutes
+            add(route, f"Scenic ~{int(got)} min" if within else "Scenic")
+    for a, lab in ((3.0, "More scenic"), (8.0, "Most scenic")):
+        add(one(a), lab)
+    return out[:max(k, 2)]
+
+
+def plan_loop(graph: Graph, scorer, origin: int, minutes: float,
+              alpha: float = 4.0, weather: float = 0.0,
+              weather_factor: float = 1.0, k: int = 3):
+    """Round trip of roughly `minutes`, back to where it started."""
     budget_s = minutes * 60.0
     half = budget_s / 2.0
-    dist, prev_seg, prev_node, elapsed = graph.dijkstra(
-        origin_node, scorer, alpha, weather=weather, max_seconds=half * 1.25,
-        weather_factor=weather_factor)
-
-    o = node_center(origin_node)
-    ring = [
-        (n, t) for n, t in elapsed.items()
-        if 0.55 * half <= t <= 1.15 * half and n != origin_node
-    ]
+    _d, ps, pn, el = graph.dijkstra(origin, scorer, alpha, weather=weather,
+                                    weather_factor=weather_factor,
+                                    max_seconds=half * 1.3)
+    o = graph.node_pos(origin)
+    ring = [(n, t) for n, t in el.items() if 0.6 * half <= t <= 1.2 * half and n != origin]
     if not ring:
-        ring = [(n, t) for n, t in elapsed.items() if t > 0]
+        ring = [(n, t) for n, t in el.items() if t > half * 0.3]
     if not ring:
         return []
 
-    # Bucket candidates by bearing so the three loops point different ways
-    # rather than being three variants of the same valley.
+    # Spread candidates across bearings so the options genuinely differ instead
+    # of being three variants of the same valley.
     buckets: dict[int, list] = defaultdict(list)
     for node, t in ring:
-        b = int(bearing(o, node_center(node)) // 45)
-        buckets[b].append((node, t))
-
+        buckets[int(bearing_deg(o, graph.node_pos(node)) // 45)].append((node, t))
     cands = []
-    for b, items in buckets.items():
-        # best = furthest-value-per-time in that bearing
+    for items in buckets.values():
         items.sort(key=lambda x: -x[1])
-        cands.append(items[0])
-    cands.sort(key=lambda x: -x[1])
+        cands.extend(items[:2])
 
     routes = []
-    for node, _t in cands[: max(k_options * 2, 6)]:
-        out_segs = graph.path_segments(prev_seg, prev_node, origin_node, node)
+    for node, _t in cands[:14]:
+        out_segs = graph.path_segments(ps, pn, origin, node)
         if not out_segs:
             continue
-        # Return leg penalises roads already used on the way out.
-        d2, ps2, pn2, el2 = graph.dijkstra(
-            node, scorer, alpha, goal=origin_node, weather=weather,
-            avoid=set(out_segs), weather_factor=weather_factor)
-        back_segs = graph.path_segments(ps2, pn2, node, origin_node)
-        if not back_segs:
+        _d2, ps2, pn2, _e2 = graph.dijkstra(node, scorer, alpha, goal=origin,
+                                            weather=weather,
+                                            weather_factor=weather_factor,
+                                            avoid=set(out_segs))
+        back = graph.path_segments(ps2, pn2, node, origin)
+        if not back:
             continue
-        route = build_route(graph, scorer, out_segs + back_segs, origin_node)
-        if route["kpis"]["km"] < 5:
+        r = build_route(graph, scorer, out_segs + back, origin)
+        if r["kpis"]["km"] < 3:
             continue
-        overlap = len(set(out_segs) & set(back_segs)) / max(len(out_segs), 1)
-        route["turnaround"] = {"lat": node_center(node)[0], "lon": node_center(node)[1]}
-        route["bearing"] = round(bearing(o, node_center(node)))
-        route["overlap"] = round(overlap, 2)
-        route["score"] = (
-            route["kpis"]["fun"] * 0.5 + route["kpis"]["scenic"] * 0.5
-        ) / max(route["kpis"]["minutes"] / 60.0, 0.25)
-        routes.append(route)
+        r["turnaround"] = {"lat": graph.node_pos(node)[0], "lon": graph.node_pos(node)[1]}
+        r["bearing"] = round(bearing_deg(o, graph.node_pos(node)))
+        r["overlap"] = round(len(set(out_segs) & set(back)) / max(len(out_segs), 1), 2)
+        r["alpha"] = alpha
+        # Rank on scenic per hour, then by how close it lands to the budget.
+        r["score"] = r["kpis"]["scenic"] - 0.4 * abs(r["kpis"]["minutes"] - minutes) / minutes
+        routes.append(r)
 
     routes.sort(key=lambda r: -r["score"])
-    # Keep bearing diversity in the final three.
     picked, used = [], set()
     for r in routes:
         b = r["bearing"] // 45
-        if b in used and len(picked) < k_options:
+        if b in used:
             continue
         picked.append(r)
         used.add(b)
-        if len(picked) >= k_options:
+        if len(picked) >= k:
             break
-    return picked or routes[:k_options]
+    for i, r in enumerate(picked):
+        r["label"] = ["Round trip", "Alternative", "Long way round"][i] if i < 3 else f"Option {i+1}"
+    return picked or routes[:k]

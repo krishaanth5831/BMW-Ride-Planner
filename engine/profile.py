@@ -17,7 +17,8 @@ from collections import Counter, defaultdict
 
 import duckdb
 
-from precompute.build_graph import ABS_ENGAGED, GRID, LEAN_STEP_NOISE, LEAN_STRAIGHT
+from precompute.build_osm_graph import (ABS_ENGAGED, GRID, LEAN_STEP_NOISE,
+                                        LEAN_STRAIGHT, build_index, snap)
 
 # Features the taste model fits weights over. Each must exist per segment.
 TASTE_FEATURES = ("curviness", "leaned_share", "speed_mean", "band_share", "elev_mean")
@@ -41,6 +42,7 @@ def summarise_trips(paths: list[str]) -> dict:
         SELECT filename AS trip, timestampinmillis AS ts,
                positionmapmatchedlatitude  AS lat,
                positionmapmatchedlongitude AS lon,
+               positionmapmatchedheading AS hdg,
                positionrawelevation AS elev, ridingvehiclespeed AS speed,
                sensorsbankingangle AS lean, ridingabsbraking AS absb,
                ridinggear AS gear, ridingenginespeed AS rpm,
@@ -57,7 +59,7 @@ def summarise_trips(paths: list[str]) -> dict:
             lag(lean) OVER w AS p_lean
         FROM raw WINDOW w AS (PARTITION BY trip ORDER BY ts)
     )
-    SELECT trip, ts, lat, lon, elev, speed, lean, absb, gear, rpm, temp,
+    SELECT trip, ts, lat, lon, hdg, elev, speed, lean, absb, gear, rpm, temp,
            cy * {GRID} + cx AS node,
            sqrt(power((lat - p_lat) * 111320.0, 2)
               + power((lon - p_lon) * 111320.0 * cos(radians(lat)), 2)) AS step_m,
@@ -95,7 +97,7 @@ def summarise_trips(paths: list[str]) -> dict:
     # Per-cell rollup, used to compare the rider against the crowd on the
     # SAME roads -- that is what makes the style ratio road-normalised.
     cells = _q(con, """
-        SELECT node,
+        SELECT node, avg(lat) AS lat, avg(lon) AS lon, avg(hdg) AS hdg,
                sum(CASE WHEN step_m <= 150 THEN step_m ELSE 0 END) AS path_m,
                sum(CASE WHEN d_lean >= ? THEN d_lean ELSE 0 END) AS lean_delta,
                sum(CASE WHEN abs(lean) > ? THEN step_m ELSE 0 END) AS leaned_m,
@@ -152,14 +154,27 @@ def _crowd_baseline(segments: list[dict]) -> dict:
     return stats
 
 
-def build_profile(paths: list[str], segments: list[dict], name: str = "uploaded") -> dict:
+def build_profile(paths: list[str], segments: list[dict], name: str = "uploaded",
+                  index: dict | None = None) -> dict:
     """The full three-channel profile."""
     summary = summarise_trips(paths)
     baseline = _crowd_baseline(segments)
+
+    # Rider cells are morton cells; OSM segment endpoints are OSM nodes. There
+    # is no id in common, so map the rider onto the road network the same way
+    # the crowd was mapped: snap each cell to the nearest segment by distance
+    # and heading.
+    if index is None:
+        index = build_index(segments)
+    seg_by_id = {s["seg_id"]: s for s in segments}
     by_node: dict[int, dict] = {}
-    for s in segments:
-        for node in (s["node_a"], s["node_b"]):
-            by_node.setdefault(node, s)
+    for node, c in summary["cells"].items():
+        lat, lon = c.get("lat"), c.get("lon")
+        if not lat:
+            continue
+        sid, _d = snap((lat, lon), c.get("hdg"), segments, index)
+        if sid is not None:
+            by_node[node] = seg_by_id[sid]
 
     # ---- Channel 1: TASTE -------------------------------------------------
     # Revealed preference: score the segments the rider CHOSE, using each

@@ -53,3 +53,25 @@ code { background: #1b222c; padding: 0 3px; border-radius: 3px; font-size: 11px;
   #panel { width: 100%; border-right: 0; border-bottom: 1px solid var(--line); }
   #map { height: 60vh; }
 }
+
+/* --- controls added for mode / duration / folder picking ---------------- */
+.tag { font-size: 10px; letter-spacing: .08em; color: var(--muted);
+       border: 1px solid var(--line); border-radius: 10px; padding: 1px 7px; margin-left: 8px; }
+.filebtn { display: block; margin: 6px 0; }
+.filebtn input { display: none; }
+.filebtn span { display: block; text-align: center; padding: 7px; font-size: 12px;
+                border: 1px dashed var(--line); border-radius: 6px; cursor: pointer;
+                color: var(--muted); }
+.filebtn span:hover { border-color: var(--blue); color: var(--fg); }
+#picked { margin: 4px 0 2px; font-size: 11px; }
+.seg { display: flex; gap: 6px; margin-bottom: 10px; }
+.seg .mode { flex: 1; }
+.seg .mode.on { background: var(--blue); border-color: var(--blue); font-weight: 600; }
+.row { display: flex; align-items: center; justify-content: space-between; margin: 8px 0; }
+.row input { width: 90px; background: #1f2630; color: var(--fg); border: 1px solid var(--line);
+             border-radius: 6px; padding: 6px 8px; font-size: 13px; }
+#abHint { margin: 6px 0 10px; }
+.via { font-size: 11px; color: var(--muted); margin-top: 4px; }
+.legend { font-size: 11px; color: var(--muted); margin-top: 8px; line-height: 1.6; }
+.legend i { display: inline-block; width: 18px; height: 3px; vertical-align: middle;
+            margin-right: 5px; border-radius: 2px; }

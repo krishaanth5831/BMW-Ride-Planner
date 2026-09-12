@@ -52,3 +52,6 @@ scratch/
 data/
 fixtures/weather/
 .env
+# Overpass per-tile intermediates; the combined ways_*.json is kept so the demo
+# does not depend on Overpass being reachable.
+fixtures/osm/tile_*.json
