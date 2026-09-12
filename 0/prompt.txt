@@ -1,0 +1,6 @@
+also about the learning part how will that get incorporated and also how will the rider's profile affect this. and those kind of information you need to add that to the algorithm along with the help of these apis so you get all the information you need OpenStreetMap (OSM) — road type, geometry/curviness, speed limits, surface, intersections, tunnels, bridges, forests, water, viewpoints.
+2. Copernicus DEM — elevation, gradients, hilliness and terrain surrounding each road.
+3. Copernicus Land Monitoring Service — forests, mountains/natural areas, urban areas, agricultural land, water → scenic-context score.
+4. Open-Meteo — current/forecast rain, snow, temperature, wind and visibility → safety + ride-condition score.
+5. HERE Traffic API (or TomTom Traffic) — congestion, incidents, closures and roadworks.
+6. Government accident/open-road-safety datasets — historical motorcycle/vehicle accidents for the so you have more factors to help determine the route and then update the docs in the plan folder
