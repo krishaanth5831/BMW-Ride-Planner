@@ -9,9 +9,6 @@ good tarmac, a view worth stopping for, a coffee stop at the right moment.
 
 Built for the **BMW Motorrad track** at the TUM.ai EHL Zurich hackathon.
 
-> Checkpoint test: README update created to verify the Entire checkpoint and
-> GitHub push workflow.
-
 ## Team
 
 | Name  | Role |
