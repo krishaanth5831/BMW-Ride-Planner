@@ -47,3 +47,8 @@ Thumbs.db
 *.db
 tmp/
 scratch/
+
+# Generated artefacts and local secrets
+data/
+fixtures/weather/
+.env

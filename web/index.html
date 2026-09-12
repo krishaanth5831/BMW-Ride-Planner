@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>BMW Ride Planner</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header>
+  <div class="brand"><b>BMW</b> RIDE PLANNER</div>
+  <div id="health" class="muted">checking…</div>
+</header>
+
+<main>
+  <aside id="panel">
+    <section class="card">
+      <h2>1 · Rider data</h2>
+      <p class="muted">Upload a rider's recorded trips (<code>.csv</code>, or a
+        <code>.zip</code> of them). No ride preferences needed — the start point,
+        duration and scoring weights all come out of the data.</p>
+      <input type="file" id="file" multiple accept=".csv,.zip">
+      <button id="go" class="primary">Plan a ride from this data</button>
+      <div class="examples">
+        <span class="muted">or use a bundled rider:</span>
+        <button data-rider="A" class="ex">A</button>
+        <button data-rider="B" class="ex">B</button>
+        <button data-rider="C" class="ex">C</button>
+      </div>
+      <div id="status" class="status"></div>
+    </section>
+
+    <section class="card hidden" id="profileCard">
+      <h2>2 · What the bike said</h2>
+      <div id="profileBody"></div>
+    </section>
+
+    <section class="card hidden" id="routeCard">
+      <h2>3 · Routes</h2>
+      <div id="routeList"></div>
+      <div id="kpis"></div>
+    </section>
+  </aside>
+
+  <div id="map"></div>
+</main>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="/static/app.js"></script>
+</body>
+</html>
