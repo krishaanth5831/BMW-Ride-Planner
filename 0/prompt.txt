@@ -1,0 +1,741 @@
+take a quick look at the whole codebase and I want to do this. I want to make a ride planner app which gives the most fun rides for the motorcycle rider. Scenic, low traffic, good weather, curves, bends, high lean angles, all those sort of things take a look at the bmw dataset that i have for the thing. i want it also personalized for the rider based on what he or she likes.
+
+---
+
+You are continuing work in the BMW-Ride-Planner repository on branch `dev`.
+ 
+User request:
+Make X→Y heatmap routes avoid long uninterrupted roads. Routes should strongly prefer repeated twists and turns while avoiding traffic. Highways should still be usable when necessary. Do not require third-party APIs unless absolutely needed; the existing crowd telemetry already provides speed, crawl share, band share, lean change, and geometry data.
+ 
+Important: preserve all existing heatmap/profile functionality and do not reset or discard current changes.
+ 
+Current implementation state:
+- X→Y heatmap is implemented in:
+  - engine/profile.py
+  - engine/scoring.py
+  - engine/router.py
+  - engine/api.py
+  - web/app.js
+  - web/index.html
+  - web/style.css
+  - README.md
+- `/api/heatmap` and `/api/plan/heatmap` exist.
+- The local graph has 65,718 segments.
+- Connected-component-aware destination snapping was added.
+- Positive highway avoidance already exists:
+  - motorway: 5×
+  - motorway_link: 4×
+  - trunk: 3×
+  - trunk_link: 2.5×
+  - primary: 1×
+  - primary_link: 0.8×
+- Heatmap currently passes `highway_avoidance=1.0`.
+- Live heatmap previously succeeded with 8 routes and scenic/fun/personal KPIs.
+- Dev server was running on `http://127.0.0.1:8000`, but restart it after code changes.
+ 
+Partial changes already made:
+`engine/scoring.py` now contains:
+- `twist_score(s)`
+- `traffic_pressure(s)`
+- `cost(..., twist_avoidance=0.0, traffic_avoidance=0.0)`
+- `road_run_km` support in the cost calculation
+- Long-straight penalty logic:
+  - uses twist score
+  - computes a normalized penalty for uninterrupted runs over ~0.6 km
+  - avoids punishing long roads that genuinely contain many twists
+- Traffic pressure uses:
+  - observed `crawl_share`
+  - inverse `band_share`
+  - road-class traffic priors
+  - confidence blending using `n_trips`
+ 
+The previous edit stopped immediately after that scoring change. Complete the integration.
+ 
+Required implementation:
+1. `engine/router.py`
+   - Extend `Graph.dijkstra(...)` to accept:
+     - `twist_avoidance`
+     - `traffic_avoidance`
+     - existing `highway_avoidance`
+   - Pass all three values into `scorer.cost(...)`.
+   - Compute `road_run_km` for segments if it is not already present.
+   - Prefer a robust method based on the same `way_id`/connected road chain rather than simply using the individual segment length.
+   - It is acceptable to precompute a map on `Graph.__init__`.
+   - Long uninterrupted road runs should be penalized, but roads with high `curvature_geo` or high crowd `curviness` should not be treated as boring straights.
+   - Keep all costs strictly positive and preserve valid Dijkstra behavior.
+ 
+2. Heatmap routing
+   - Apply strong defaults only to heatmap mode:
+     - `highway_avoidance=1.0`
+     - `twist_avoidance` around `2.0–3.0`
+     - `traffic_avoidance` around `2.0`
+   - Keep highways available as fallback.
+   - Continue enforcing:
+     - capability exclusions as hard gates
+     - max route length:
+       `min(straight * 1.6, straight + radius_km)`
+     - route overlap dedupe threshold of `0.55`
+     - up to 42 Dijkstra attempts
+   - Rank routes by the existing requested score behavior.
+ 
+3. Traffic behavior
+   - Use existing crowd data:
+     - `crawl_share`
+     - `band_share`
+     - `speed_mean` where appropriate
+     - road class priors for uncovered roads
+   - High traffic pressure should increase cost, not exclude a segment.
+   - Do not add API keys or pip dependencies.
+   - Do not call a live traffic provider unless you can prove it is already configured and safe; it is not necessary for this task.
+ 
+4. Route KPIs/UI
+   - If practical, add route-level KPIs:
+     - `twist_score` or `twisty_pct`
+     - `traffic_pressure`
+     - `long_straight_km` or `max_road_run_km`
+   - Show at least a concise “twisty route” / “traffic avoided” explanation in heatmap route cards or the explanation panel.
+   - Preserve existing scenic, fun, personal, crowd coverage, junction, and elevation KPIs.
+   - Keep the existing frontend score toggle and heatmap rendering working.
+ 
+5. Documentation
+   - Update README heatmap documentation to explain:
+     - highways are avoided but not forbidden
+     - long uninterrupted roads are penalized
+     - repeated twists are preferred
+     - traffic pressure comes from BMW crowd telemetry and road-class priors
+     - capability remains a hard exclusion
+ 
+Verification:
+- Run:
+  - `python -m compileall -q engine precompute`
+  - `node --check web/app.js`
+  - `git diff --check`
+- Add/run a synthetic routing test proving:
+  1. With avoidance disabled, a fast motorway/straight route can win.
+  2. With heatmap avoidance enabled, a slower winding secondary-road route wins.
+  3. A long straight secondary road loses to a shorter twisty road when reasonable.
+  4. A high-crawl road loses to a similarly fast low-traffic road.
+  5. Every returned edge cost remains > 0.
+- Test live health:
+  `curl http://127.0.0.1:8000/api/health`
+- Test live heatmap:
+  `time curl -fsS -X POST 'http://127.0.0.1:8000/api/plan/example/A?mode=heatmap&origin_lat=48.13&origin_lon=11.58&dest_lat=47.64&dest_lon=11.34&radius_km=100' -o /tmp/bmw-heatmap.json`
+- Confirm:
+  - HTTP 200
+  - mode is `heatmap`
+  - routes are returned
+  - route KPIs include scenic, fun, personal
+  - heatmap segments include scenic, fun, personal, and weight
+  - response stays within the detour cap
+- Restart the server detached on port 8000 and leave it running:
+  `setsid python -m uvicorn engine.api:app --host 0.0.0.0 --port 8000 >/tmp/bmw-ride-planner-uvicorn.log 2>&1 </dev/null &`
+ 
+Do not:
+- reset git
+- delete unrelated untracked files
+- add pip dependencies
+- require API keys
+- hard-block every highway
+- weaken capability exclusions
+- break legacy `/api/plan/upload`, `/api/plan/example/{rider}`, loop, or point-to-point behavior
+ 
+At the end, report:
+- files changed
+- exact avoidance behavior
+- verification results
+- dev server URL spin up subagents to help
+
+---
+
+You are continuing work in the BMW-Ride-Planner repository on branch `dev`.
+ 
+User request:
+Make X→Y heatmap routes avoid long uninterrupted roads. Routes should strongly prefer repeated twists and turns while avoiding traffic. Highways should still be usable when necessary. Do not require third-party APIs unless absolutely needed; the existing crowd telemetry already provides speed, crawl share, band share, lean change, and geometry data.
+ 
+Important: preserve all existing heatmap/profile functionality and do not reset or discard current changes.
+ 
+Current implementation state:
+- X→Y heatmap is implemented in:
+  - engine/profile.py
+  - engine/scoring.py
+  - engine/router.py
+  - engine/api.py
+  - web/app.js
+  - web/index.html
+  - web/style.css
+  - README.md
+- `/api/heatmap` and `/api/plan/heatmap` exist.
+- The local graph has 65,718 segments.
+- Connected-component-aware destination snapping was added.
+- Positive highway avoidance already exists:
+  - motorway: 5×
+  - motorway_link: 4×
+  - trunk: 3×
+  - trunk_link: 2.5×
+  - primary: 1×
+  - primary_link: 0.8×
+- Heatmap currently passes `highway_avoidance=1.0`.
+- Live heatmap previously succeeded with 8 routes and scenic/fun/personal KPIs.
+- Dev server was running on `http://127.0.0.1:8000`, but restart it after code changes.
+ 
+Partial changes already made:
+`engine/scoring.py` now contains:
+- `twist_score(s)`
+- `traffic_pressure(s)`
+- `cost(..., twist_avoidance=0.0, traffic_avoidance=0.0)`
+- `road_run_km` support in the cost calculation
+- Long-straight penalty logic:
+  - uses twist score
+  - computes a normalized penalty for uninterrupted runs over ~0.6 km
+  - avoids punishing long roads that genuinely contain many twists
+- Traffic pressure uses:
+  - observed `crawl_share`
+  - inverse `band_share`
+  - road-class traffic priors
+  - confidence blending using `n_trips`
+ 
+The previous edit stopped immediately after that scoring change. Complete the integration.
+ 
+Required implementation:
+1. `engine/router.py`
+   - Extend `Graph.dijkstra(...)` to accept:
+     - `twist_avoidance`
+     - `traffic_avoidance`
+     - existing `highway_avoidance`
+   - Pass all three values into `scorer.cost(...)`.
+   - Compute `road_run_km` for segments if it is not already present.
+   - Prefer a robust method based on the same `way_id`/connected road chain rather than simply using the individual segment length.
+   - It is acceptable to precompute a map on `Graph.__init__`.
+   - Long uninterrupted road runs should be penalized, but roads with high `curvature_geo` or high crowd `curviness` should not be treated as boring straights.
+   - Keep all costs strictly positive and preserve valid Dijkstra behavior.
+ 
+2. Heatmap routing
+   - Apply strong defaults only to heatmap mode:
+     - `highway_avoidance=1.0`
+     - `twist_avoidance` around `2.0–3.0`
+     - `traffic_avoidance` around `2.0`
+   - Keep highways available as fallback.
+   - Continue enforcing:
+     - capability exclusions as hard gates
+     - max route length:
+       `min(straight * 1.6, straight + radius_km)`
+     - route overlap dedupe threshold of `0.55`
+     - up to 42 Dijkstra attempts
+   - Rank routes by the existing requested score behavior.
+ 
+3. Traffic behavior
+   - Use existing crowd data:
+     - `crawl_share`
+     - `band_share`
+     - `speed_mean` where appropriate
+     - road class priors for uncovered roads
+   - High traffic pressure should increase cost, not exclude a segment.
+   - Do not add API keys or pip dependencies.
+   - Do not call a live traffic provider unless you can prove it is already configured and safe; it is not necessary for this task.
+ 
+4. Route KPIs/UI
+   - If practical, add route-level KPIs:
+     - `twist_score` or `twisty_pct`
+     - `traffic_pressure`
+     - `long_straight_km` or `max_road_run_km`
+   - Show at least a concise “twisty route” / “traffic avoided” explanation in heatmap route cards or the explanation panel.
+   - Preserve existing scenic, fun, personal, crowd coverage, junction, and elevation KPIs.
+   - Keep the existing frontend score toggle and heatmap rendering working.
+ 
+5. Documentation
+   - Update README heatmap documentation to explain:
+     - highways are avoided but not forbidden
+     - long uninterrupted roads are penalized
+     - repeated twists are preferred
+     - traffic pressure comes from BMW crowd telemetry and road-class priors
+     - capability remains a hard exclusion
+ 
+Verification:
+- Run:
+  - `python -m compileall -q engine precompute`
+  - `node --check web/app.js`
+  - `git diff --check`
+- Add/run a synthetic routing test proving:
+  1. With avoidance disabled, a fast motorway/straight route can win.
+  2. With heatmap avoidance enabled, a slower winding secondary-road route wins.
+  3. A long straight secondary road loses to a shorter twisty road when reasonable.
+  4. A high-crawl road loses to a similarly fast low-traffic road.
+  5. Every returned edge cost remains > 0.
+- Test live health:
+  `curl http://127.0.0.1:8000/api/health`
+- Test live heatmap:
+  `time curl -fsS -X POST 'http://127.0.0.1:8000/api/plan/example/A?mode=heatmap&origin_lat=48.13&origin_lon=11.58&dest_lat=47.64&dest_lon=11.34&radius_km=100' -o /tmp/bmw-heatmap.json`
+- Confirm:
+  - HTTP 200
+  - mode is `heatmap`
+  - routes are returned
+  - route KPIs include scenic, fun, personal
+  - heatmap segments include scenic, fun, personal, and weight
+  - response stays within the detour cap
+- Restart the server detached on port 8000 and leave it running:
+  `setsid python -m uvicorn engine.api:app --host 0.0.0.0 --port 8000 >/tmp/bmw-ride-planner-uvicorn.log 2>&1 </dev/null &`
+ 
+Do not:
+- reset git
+- delete unrelated untracked files
+- add pip dependencies
+- require API keys
+- hard-block every highway
+- weaken capability exclusions
+- break legacy `/api/plan/upload`, `/api/plan/example/{rider}`, loop, or point-to-point behavior
+ 
+At the end, report:
+- files changed
+- exact avoidance behavior
+- verification results
+- dev server URL spin up subagents to help
+
+---
+
+You are working in the BMW-Ride-Planner repository.
+ 
+User goal:
+- Make the X→Y heatmap actually work end-to-end.
+- Make choosing the two points on the map clear and reliable.
+- Avoid highways as much as possible.
+- Merge only these feature changes into `main`.
+- Do not replace or disrupt the scoring mechanism already present in `main`.
+- Existing scoring behavior in `main` may remain exactly as-is; adapt the new routing/heatmap feature to its existing scoring API where possible.
+ 
+Repository/branch safety:
+- Current development work is on branch `dev`.
+- `main` already contains working code that must not be disrupted.
+- Do not merge all of `dev` blindly.
+- First inspect:
+  - `git status --short`
+  - `git diff`
+  - `git log --oneline --decorate -10`
+  - `git diff main...dev --stat`
+- Do not reset, clean, force-push, or delete unrelated files.
+- Preserve unrelated existing changes and untracked files.
+- Before modifying `main`, isolate the feature changes into a focused commit or patch.
+- Merge/cherry-pick only the focused feature commit into `main`.
+- Do not push unless explicitly requested.
+- Do not create a PR.
+ 
+Feature requirements:
+ 
+1. Functional X→Y heatmap
+- Add or repair a heatmap route mode from point A to point B.
+- The response should include:
+  - `mode: "heatmap"`
+  - multiple distinct routes, ideally up to 30 when the graph permits
+  - route KPIs including:
+    - scenic
+    - fun, if supported by the existing scorer
+    - personal, if supported by the existing scorer
+    - km
+    - minutes
+    - curviness
+    - crowd_covered_pct
+    - junctions
+    - elev_gain_m
+  - heatmap segment data:
+    - `seg_id`
+    - `geometry`
+    - the available score fields from the existing scorer
+    - normalized `weight`
+- Preserve the existing route scoring implementation in `main`.
+- Do not rewrite the main scoring formula merely to implement heatmap routing.
+- If `main` only exposes scenic scoring, keep that scoring and make fun/personal optional or map them to existing available fields without breaking compatibility.
+- Preserve legacy loop and point-to-point endpoints.
+ 
+2. Better two-point selection
+- In the UI, add a clearly labeled X→Y/Heatmap mode.
+- The user must be able to:
+  1. click “Set A”
+  2. click the map to place A
+  3. click “Set B”
+  4. click the map to place B
+  5. see both markers and coordinates
+  6. replace either point by re-arming A or B
+  7. click “Build Heatmap”
+- Do not use ambiguous state such as an undefined `dest` variable; consistently use the actual A/B state.
+- Validate before submitting:
+  - both A and B exist
+  - A and B are not identical
+  - both points are inside the graph bbox
+- On errors, show a readable message and include the bbox when relevant.
+- The backend must require `origin_lat`, `origin_lon`, `dest_lat`, and `dest_lon` for heatmap mode.
+- Snap both points to the nearest usable road.
+- Prefer snapping both endpoints to the same connected graph component.
+- If no connected route exists, return HTTP 422 with useful metadata instead of silently failing.
+ 
+3. Highway avoidance
+- Avoid highways through positive routing cost, not a universal hard exclusion.
+- Keep all edge costs strictly positive.
+- Highways should remain available if they are the only practical way to connect A and B.
+- Prefer:
+  - secondary
+  - tertiary
+  - unclassified
+  - winding named roads
+- Strongly penalize:
+  - motorway
+  - motorway_link
+  - trunk
+  - trunk_link
+- Mildly penalize:
+  - primary
+  - primary_link
+- Apply the strongest highway avoidance preference to heatmap mode.
+- Do not disrupt existing scoring in `main`; implement highway avoidance as a routing-cost modifier around the existing scorer.
+- If existing crowd fields are available, also prefer roads with:
+  - lower `crawl_share`
+  - better flow
+  - higher speed-band share
+- Do not add API keys or new pip dependencies.
+- Do not require a live traffic API. The existing BMW crowd data is sufficient for this feature.
+- If an existing traffic API integration is already present, leave it optional and fail safely.
+ 
+4. Heatmap rendering
+- Clear previous heatmap and route layers before drawing a new result.
+- Draw heatmap segments with:
+  - greener = better selected score
+  - thicker/more opaque = more candidate routes use that segment
+- Draw the top three routes visibly above the heatmap.
+- Add a score selector if supported by the existing response:
+  - Scenic
+  - Fun
+  - Personal
+- Sort route cards by the selected score.
+- Show:
+  - scenic badge
+  - fun badge if available
+  - personal badge if available
+  - distance/time
+  - `via` road names
+  - “On roads BMW riders use X%”
+  - highway-avoidance explanation where appropriate
+- Keep the existing map underlay and legacy UI working.
+ 
+5. Safe translation from dev into main
+- Compare `dev` and `main` carefully.
+- Identify only files/changes needed for:
+  - heatmap route sampling
+  - A/B map selection
+  - highway avoidance
+  - heatmap API response
+  - heatmap UI rendering
+  - minimal README documentation
+- Do not bring unrelated scoring/profile/precompute changes into `main` unless required for compatibility.
+- If dev’s scoring changes conflict with main:
+  - prefer main’s scoring implementation
+  - add a small adapter/helper in routing/API instead of replacing main scoring
+- Keep the patch small and reviewable.
+- Create one focused commit with a message similar to:
+  `Add X-Y heatmap routing with map point selection and highway avoidance`
+- Before applying to main:
+  - review the focused diff
+  - confirm no unrelated files are included
+- Apply only that focused commit to `main`.
+- After switching to `main`, verify the working tree and diff again.
+ 
+Required verification:
+ 
+Backend:
+```bash
+python -m compileall -q engine precompute
+python -m precompute.build_osm_graph --help >/dev/null
+git diff --check
+
+Frontend:
+
+// bash
+node --check web/app.js
+
+Synthetic routing tests:
+- Build a tiny graph with:
+- a direct motorway route
+- a slower winding secondary-road route
+- a long straight secondary-road route
+- a low-traffic alternative
+- Verify:
+1. highway avoidance disabled can choose the fast motorway
+2. heatmap highway avoidance chooses the winding secondary route
+3. long uninterrupted roads are disfavored
+4. high-traffic/crawl-heavy roads are disfavored
+5. every computed edge cost is greater than zero
+
+Live server:
+
+// bash
+setsid python -m uvicorn engine.api:app --host 0.0.0.0 --port 8000 \
+  >/tmp/bmw-ride-planner-uvicorn.log 2>&1 </dev/null &
+
+Check:
+
+// bash
+curl -fsS http://127.0.0.1:8000/api/health
+
+For the bundled example rider, use the existing example endpoint if available:
+
+// bash
+time curl -fsS -X POST \
+  'http://127.0.0.1:8000/api/plan/example/A?mode=heatmap&origin_lat=48.13&origin_lon=11.58&dest_lat=47.64&dest_lon=11.34&radius_km=100' \
+  -o /tmp/bmw-heatmap.json
+
+Verify the JSON:
+- HTTP 200
+-  mode == "heatmap" 
+- routes are non-empty
+- routes contain the expected KPI fields
+- heatmap is non-empty
+- route lengths obey the configured detour cap
+- no highway-avoidance logic makes all routes unreachable
+
+UI verification:
+- Open  http://127.0.0.1:8000 
+- Select heatmap mode
+- Set A and B independently
+- Replace A and B independently
+- Build the heatmap
+- Confirm route layers, heatmap, cards, score controls, and errors work
+
+Final response should report:
+- Which focused files were translated into  main 
+- Which scoring code was intentionally left unchanged
+- Exact highway-avoidance behavior
+- How A/B selection works
+- Verification results
+- Whether the dev server is running
+- The URL:  http://127.0.0.1:8000 
+- The final commit hash on  main 
+
+Important prohibitions:
+- Do not reset or clean the repository.
+- Do not overwrite main’s scoring mechanism.
+- Do not merge unrelated dev work.
+- Do not add API keys.
+- Do not add dependencies.
+- Do not push.
+
+---
+
+You are working in the BMW-Ride-Planner repository.
+ 
+User goal:
+- Make the X→Y heatmap actually work end-to-end.
+- Make choosing the two points on the map clear and reliable.
+- Avoid highways as much as possible.
+- Merge only these feature changes into `main`.
+- Do not replace or disrupt the scoring mechanism already present in `main`.
+- Existing scoring behavior in `main` may remain exactly as-is; adapt the new routing/heatmap feature to its existing scoring API where possible.
+ 
+Repository/branch safety:
+- Current development work is on branch `dev`.
+- `main` already contains working code that must not be disrupted.
+- Do not merge all of `dev` blindly.
+- First inspect:
+  - `git status --short`
+  - `git diff`
+  - `git log --oneline --decorate -10`
+  - `git diff main...dev --stat`
+- Do not reset, clean, force-push, or delete unrelated files.
+- Preserve unrelated existing changes and untracked files.
+- Before modifying `main`, isolate the feature changes into a focused commit or patch.
+- Merge/cherry-pick only the focused feature commit into `main`.
+- Do not push unless explicitly requested.
+- Do not create a PR.
+ 
+Feature requirements:
+ 
+1. Functional X→Y heatmap
+- Add or repair a heatmap route mode from point A to point B.
+- The response should include:
+  - `mode: "heatmap"`
+  - multiple distinct routes, ideally up to 30 when the graph permits
+  - route KPIs including:
+    - scenic
+    - fun, if supported by the existing scorer
+    - personal, if supported by the existing scorer
+    - km
+    - minutes
+    - curviness
+    - crowd_covered_pct
+    - junctions
+    - elev_gain_m
+  - heatmap segment data:
+    - `seg_id`
+    - `geometry`
+    - the available score fields from the existing scorer
+    - normalized `weight`
+- Preserve the existing route scoring implementation in `main`.
+- Do not rewrite the main scoring formula merely to implement heatmap routing.
+- If `main` only exposes scenic scoring, keep that scoring and make fun/personal optional or map them to existing available fields without breaking compatibility.
+- Preserve legacy loop and point-to-point endpoints.
+ 
+2. Better two-point selection
+- In the UI, add a clearly labeled X→Y/Heatmap mode.
+- The user must be able to:
+  1. click “Set A”
+  2. click the map to place A
+  3. click “Set B”
+  4. click the map to place B
+  5. see both markers and coordinates
+  6. replace either point by re-arming A or B
+  7. click “Build Heatmap”
+- Do not use ambiguous state such as an undefined `dest` variable; consistently use the actual A/B state.
+- Validate before submitting:
+  - both A and B exist
+  - A and B are not identical
+  - both points are inside the graph bbox
+- On errors, show a readable message and include the bbox when relevant.
+- The backend must require `origin_lat`, `origin_lon`, `dest_lat`, and `dest_lon` for heatmap mode.
+- Snap both points to the nearest usable road.
+- Prefer snapping both endpoints to the same connected graph component.
+- If no connected route exists, return HTTP 422 with useful metadata instead of silently failing.
+ 
+3. Highway avoidance
+- Avoid highways through positive routing cost, not a universal hard exclusion.
+- Keep all edge costs strictly positive.
+- Highways should remain available if they are the only practical way to connect A and B.
+- Prefer:
+  - secondary
+  - tertiary
+  - unclassified
+  - winding named roads
+- Strongly penalize:
+  - motorway
+  - motorway_link
+  - trunk
+  - trunk_link
+- Mildly penalize:
+  - primary
+  - primary_link
+- Apply the strongest highway avoidance preference to heatmap mode.
+- Do not disrupt existing scoring in `main`; implement highway avoidance as a routing-cost modifier around the existing scorer.
+- If existing crowd fields are available, also prefer roads with:
+  - lower `crawl_share`
+  - better flow
+  - higher speed-band share
+- Do not add API keys or new pip dependencies.
+- Do not require a live traffic API. The existing BMW crowd data is sufficient for this feature.
+- If an existing traffic API integration is already present, leave it optional and fail safely.
+ 
+4. Heatmap rendering
+- Clear previous heatmap and route layers before drawing a new result.
+- Draw heatmap segments with:
+  - greener = better selected score
+  - thicker/more opaque = more candidate routes use that segment
+- Draw the top three routes visibly above the heatmap.
+- Add a score selector if supported by the existing response:
+  - Scenic
+  - Fun
+  - Personal
+- Sort route cards by the selected score.
+- Show:
+  - scenic badge
+  - fun badge if available
+  - personal badge if available
+  - distance/time
+  - `via` road names
+  - “On roads BMW riders use X%”
+  - highway-avoidance explanation where appropriate
+- Keep the existing map underlay and legacy UI working.
+ 
+5. Safe translation from dev into main
+- Compare `dev` and `main` carefully.
+- Identify only files/changes needed for:
+  - heatmap route sampling
+  - A/B map selection
+  - highway avoidance
+  - heatmap API response
+  - heatmap UI rendering
+  - minimal README documentation
+- Do not bring unrelated scoring/profile/precompute changes into `main` unless required for compatibility.
+- If dev’s scoring changes conflict with main:
+  - prefer main’s scoring implementation
+  - add a small adapter/helper in routing/API instead of replacing main scoring
+- Keep the patch small and reviewable.
+- Create one focused commit with a message similar to:
+  `Add X-Y heatmap routing with map point selection and highway avoidance`
+- Before applying to main:
+  - review the focused diff
+  - confirm no unrelated files are included
+- Apply only that focused commit to `main`.
+- After switching to `main`, verify the working tree and diff again.
+ 
+Required verification:
+ 
+Backend:
+```bash
+python -m compileall -q engine precompute
+python -m precompute.build_osm_graph --help >/dev/null
+git diff --check
+
+Frontend:
+
+// bash
+node --check web/app.js
+
+Synthetic routing tests:
+- Build a tiny graph with:
+- a direct motorway route
+- a slower winding secondary-road route
+- a long straight secondary-road route
+- a low-traffic alternative
+- Verify:
+1. highway avoidance disabled can choose the fast motorway
+2. heatmap highway avoidance chooses the winding secondary route
+3. long uninterrupted roads are disfavored
+4. high-traffic/crawl-heavy roads are disfavored
+5. every computed edge cost is greater than zero
+
+Live server:
+
+// bash
+setsid python -m uvicorn engine.api:app --host 0.0.0.0 --port 8000 \
+  >/tmp/bmw-ride-planner-uvicorn.log 2>&1 </dev/null &
+
+Check:
+
+// bash
+curl -fsS http://127.0.0.1:8000/api/health
+
+For the bundled example rider, use the existing example endpoint if available:
+
+// bash
+time curl -fsS -X POST \
+  'http://127.0.0.1:8000/api/plan/example/A?mode=heatmap&origin_lat=48.13&origin_lon=11.58&dest_lat=47.64&dest_lon=11.34&radius_km=100' \
+  -o /tmp/bmw-heatmap.json
+
+Verify the JSON:
+- HTTP 200
+-  mode == "heatmap" 
+- routes are non-empty
+- routes contain the expected KPI fields
+- heatmap is non-empty
+- route lengths obey the configured detour cap
+- no highway-avoidance logic makes all routes unreachable
+
+UI verification:
+- Open  http://127.0.0.1:8000 
+- Select heatmap mode
+- Set A and B independently
+- Replace A and B independently
+- Build the heatmap
+- Confirm route layers, heatmap, cards, score controls, and errors work
+
+Final response should report:
+- Which focused files were translated into  main 
+- Which scoring code was intentionally left unchanged
+- Exact highway-avoidance behavior
+- How A/B selection works
+- Verification results
+- Whether the dev server is running
+- The URL:  http://127.0.0.1:8000 
+- The final commit hash on  main 
+
+Important prohibitions:
+- Do not reset or clean the repository.
+- Do not overwrite main’s scoring mechanism.
+- Do not merge unrelated dev work.
+- Do not add API keys.
+- Do not add dependencies.
+- Do not push.
