@@ -175,6 +175,15 @@ gh pr create --base main --head dev --title "Release: <what's in it>"
 One other person must approve it — GitHub enforces this on `main` — and then a
 human merges it. That is the only way code reaches `main`.
 
+> **Release PRs (`dev` → `main`) must use "Create a merge commit". Never
+> "Squash and merge" here.** Squashing creates a commit on `main` that does not
+> exist in `dev`'s history; the two branches then diverge permanently and every
+> later release PR shows phantom conflicts in files nobody touched. We will
+> release at least twice (a frozen demo build, then the final), so this matters.
+>
+> Squashing is fine — preferred, even — for `feat/*` → `dev` PRs. It keeps
+> `dev`'s history one clean commit per feature.
+
 Rule of thumb: if `dev` is broken, fine, fix it. If `main` is broken during
 judging, that is the whole hackathon.
 
