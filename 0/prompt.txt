@@ -1,0 +1,13 @@
+Discard that old plan and make a new plan based on this. We will use these kpi for the route generation and this will also be connected to the dataset so that we can load routes directly in the viewer. Tell me the tech stack for this. Then in the second pic I have the info for the ui of the webapp and a visual representation or uiux that the user sees so it’s easy for them to generate a route and things like that in the ui I should be able to add the user a b or c and be able to view all the things that are in the dashboard work
+
+---
+
+make a plan folder in the repo and put all the plan docs in there to view first push commit to dev then pr to main
+
+---
+
+explain to me in simple terms how the algorithm for making the route will work, what data it will use how will it display how it came to that decision and things like that
+
+---
+
+make a detailed doc with the algorithm and commit and push to dev then pr to main then create a checkpoint
