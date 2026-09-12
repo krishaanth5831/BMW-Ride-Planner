@@ -86,7 +86,12 @@
   <fieldset>
     <legend>Mode 2 — joyride</legend>
     <label>Budget — <b id="minV">90</b> min</label>
-    <input type="range" id="min" min="30" max="180" value="90" step="10">
+    <input type="range" id="min" min="30" max="300" value="90" step="10">
+    <label style="margin-top:10px"><input type="checkbox" id="escape" checked>
+      Escape the city first</label>
+    <div class="note">Fades α out where junctions are dense, so the ride takes
+      the quickest way out of town, saves the detour budget for the countryside,
+      and comes home. One search, not three.</div>
     <button id="loop" disabled>Loop from start</button>
   </fieldset>
 
@@ -255,6 +260,9 @@ function draw(routes, extra) {
       <div class="kpi"><span>climb</span><b>${fmt(k.elev_gain_m)} m</b></div>
       ${k.crowd_covered_pct !== undefined ?
         `<div class="kpi"><span>crowd coverage</span><b>${k.crowd_covered_pct}%</b></div>` : ''}
+      ${r.value_thirds ? `<div class="kpi"><span>value out / middle / back</span>
+        <b>${r.value_thirds[0]} · <span style="color:#5ad1a0">${r.value_thirds[1]}</span> · ${r.value_thirds[2]}</b></div>
+        <div class="kpi"><span>in town</span><b>${Math.round(r.urban_share * 100)}%</b></div>` : ''}
       ${r.roads && r.roads.length ?
         `<div class="kpi" style="display:block;margin-top:5px">via ${r.roads.slice(0,4).join(' · ')}</div>` : ''}
     </div>`);
@@ -282,7 +290,15 @@ $('go').onclick = () => run($('go'), async () => {
 $('loop').onclick = () => run($('loop'), async () => {
   const d = await j('/api/cells/joyride',
     { origin: start, minutes: +$('min').value, lean_p95: +$('lean').value,
-      engine: engine() });
-  draw(d.routes, `Out on the fun-weighted cost, back with a reuse penalty.`);
+      engine: engine(), escape: $('escape').checked });
+  const t = d.routes[0];
+  const note = t && t.value_thirds
+    ? `Origin urbanness <b>${d.origin_urban}</b>. ` +
+      (t.escaped_town ? 'Turnarounds are out of town.'
+                      : '<span class="warn">No rural turnaround inside this ' +
+                        'budget — every option stays in the suburbs. Give it ' +
+                        'more time.</span>')
+    : '';
+  draw(d.routes, note);
 });
 </script>

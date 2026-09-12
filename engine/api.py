@@ -461,7 +461,8 @@ def cells_route(body: dict):
                 f"the crowd rode.",
             )
         g = get_road_graph()
-        cost = _croads.RoadCost(g, cost_cells)
+        cost = _croads.RoadCost(g, cost_cells,
+                                escape=bool(body.get("escape", True)))
         start, goal = (g.nearest_node(*body["start"]), g.nearest_node(*body["goal"]))
         if start is None or goal is None:
             raise HTTPException(400, "could not snap those points to a road")
@@ -501,13 +502,19 @@ def cells_joyride(body: dict):
             raise HTTPException(400, "origin is outside the cached road tiles")
         g = get_road_graph()
         start = g.nearest_node(*body["origin"])
-        loops = _croads.joyride(g, _croads.RoadCost(g, cost_cells), start,
-                                minutes, alpha=alpha)
+        cost = _croads.RoadCost(g, cost_cells,
+                                escape=bool(body.get("escape", True)))
+        loops = _croads.joyride(g, cost, start, minutes, alpha=alpha)
         origin = list(g.node_pos(start))
-        keys = ("label", "bearing", "overlap", "coords", "kpis", "roads")
+        keys = ("label", "bearing", "overlap", "coords", "kpis", "roads",
+                "value_thirds", "urban_share", "turnaround_urban",
+                "escaped_town")
 
-    return {"engine": engine, "origin": origin,
-            "routes": [{k: r[k] for k in keys} for r in loops]}
+    out = {"engine": engine, "origin": origin,
+           "routes": [{k: r[k] for k in keys} for r in loops]}
+    if engine != "cells":
+        out["origin_urban"] = round(get_road_graph().urban_of_node(start), 2)
+    return out
 
 
 @app.get("/api/mapconfig")

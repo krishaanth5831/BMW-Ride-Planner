@@ -43,6 +43,14 @@ FIXTURES = os.path.join(ROOT, "fixtures", "osm")
 # somebody's click path.
 BBOX = (47.60, 11.15, 48.25, 11.80)
 
+# ~2 km at this latitude. Big enough that one quiet street does not read as
+# countryside, small enough that a town does not smear across a valley.
+URBAN_CELL_DEG = 0.018
+
+# Below this a place counts as out of town, and is allowed to host a
+# turnaround.
+RURAL_MAX = 0.18
+
 
 class RoadGraph:
     """OSM segments as edges, OSM junctions as nodes, morton cells as scores."""
@@ -63,6 +71,7 @@ class RoadGraph:
             self._pos.setdefault(s["node_a"], (g[0][0], g[0][1]))
             self._pos.setdefault(s["node_b"], (g[-1][0], g[-1][1]))
         self._main = self._main_component()
+        self._urban = self._urbanness()
 
     def _main_component(self) -> set[int]:
         """The biggest connected piece of the network.
@@ -90,6 +99,39 @@ class RoadGraph:
             if len(comp) > len(best):
                 best = comp
         return best
+
+    def _urbanness(self) -> dict:
+        """How built-up each place is, 0 rural to 1 city centre.
+
+        Junction density is the signal, because it is the only one that works
+        where it matters: the crowd never rode the Munich centre square at all,
+        so crowd speed is simply absent there. Junctions per ~2 km cell,
+        measured on this graph: Munich centre 223, Wolfratshausen 68,
+        Kesselberg 0. Normalised against the graph's own busiest cell and
+        cached per node, because recomputing it inside Dijkstra would cost more
+        than the search.
+        """
+        deg3 = defaultdict(int)
+        for node, (lat, lon) in self._pos.items():
+            if self.degree.get(node, 0) >= 3:
+                deg3[self._grid(lat, lon)] += 1
+        if not deg3:
+            return {}
+        # A handful of freak cells should not set the scale for everything
+        # else, so normalise against the 95th percentile, not the maximum.
+        counts = sorted(deg3.values())
+        top = max(counts[int(0.95 * (len(counts) - 1))], 1)
+        return {k: min(1.0, v / top) for k, v in deg3.items()}
+
+    @staticmethod
+    def _grid(lat: float, lon: float) -> tuple[int, int]:
+        return (int(lat / URBAN_CELL_DEG), int(lon / (URBAN_CELL_DEG * 1.5)))
+
+    def urban_at(self, lat: float, lon: float) -> float:
+        return self._urban.get(self._grid(lat, lon), 0.0)
+
+    def urban_of_node(self, node: int) -> float:
+        return self.urban_at(*self.node_pos(node))
 
     def other_end(self, seg: dict, node: int) -> int:
         return seg["node_b"] if node == seg["node_a"] else seg["node_a"]
@@ -164,9 +206,10 @@ CLASS_SPEED = {
 class RoadCost:
     """The identical distortion, reading its terms from the square below."""
 
-    def __init__(self, graph: RoadGraph, cost: Cost):
+    def __init__(self, graph: RoadGraph, cost: Cost, escape: bool = True):
         self.g = graph
         self.c = cost                       # the cell Cost, reused verbatim
+        self.escape = escape
 
     def value(self, seg: dict) -> float:
         cell = self.g.cell_of(seg)
@@ -182,9 +225,27 @@ class RoadCost:
         cell = self.g.cell_of(seg)
         return False if cell is None else self.c.excluded(cell)
 
+    def alpha_at(self, seg: dict, alpha: float) -> float:
+        """Spend the detour budget where there is something to detour for.
+
+        A city has no scenic road to find, so paying alpha inside one just buys
+        a slower way through traffic. Fading alpha out with urbanness makes the
+        SAME search do what a rider actually wants -- shortest way out of town,
+        then the long way round once there is countryside to enjoy, then home.
+        No phases, no second engine: the shape falls out of one Dijkstra.
+
+        The four properties hold unchanged. alpha_eff >= 0, so the multiplier
+        is still >= 1, every arc is still strictly positive, and alpha is still
+        the one dial -- it just does not apply where it would be wasted.
+        """
+        if not self.escape:
+            return alpha
+        return alpha * (1.0 - self.g.urban_at(*seg["mid"]))
+
     def edge_cost(self, seg: dict, alpha: float) -> float:
         t = self.g.seconds(seg)
-        return t * (1.0 + alpha * (1.0 - self.value(seg)) + BETA * self.risk(seg))
+        a = self.alpha_at(seg, alpha)
+        return t * (1.0 + a * (1.0 - self.value(seg)) + BETA * self.risk(seg))
 
 
 def dijkstra(g: RoadGraph, cost: RoadCost, start: int, alpha: float, *,
@@ -319,16 +380,53 @@ def bearing(a, b) -> float:
     return (math.degrees(math.atan2(y, x)) + 360) % 360
 
 
+def _thirds(g: RoadGraph, cost: RoadCost, seg_ids: list[int]) -> dict:
+    """Value of the first, middle and last third of the ride, by distance.
+
+    This is the number that says whether the escape actually worked. A loop
+    that dawdles through the suburbs and one that sprints out to a pass and
+    plays there can have the same average value; only the middle third tells
+    them apart.
+    """
+    total = sum(float(g.by_id[s]["length_m"]) for s in seg_ids) or 1.0
+    acc = 0.0
+    buckets = [[0.0, 0.0], [0.0, 0.0], [0.0, 0.0]]   # [value*m, m]
+    urban_m = 0.0
+    for sid in seg_ids:
+        seg = g.by_id[sid]
+        L = float(seg["length_m"])
+        i = min(2, int(3 * (acc + L / 2) / total))
+        buckets[i][0] += cost.value(seg) * L
+        buckets[i][1] += L
+        urban_m += g.urban_at(*seg["mid"]) * L
+        acc += L
+    v = [round(b[0] / b[1], 3) if b[1] else 0.0 for b in buckets]
+    return {"value_thirds": v, "middle_value": v[1],
+            "urban_share": round(urban_m / total, 2)}
+
+
 def joyride(g: RoadGraph, cost: RoadCost, start: int, minutes: float,
             alpha: float = 3.0, k: int = 3) -> list[dict]:
     """Mode 2, unchanged in shape -- flood, ring, bearings, out and back."""
     budget = minutes * 60.0
     half = budget / 2.0
-    _d, secs, ps, pn = dijkstra(g, cost, start, alpha, max_seconds=half * 1.25)
+    _d, secs, ps, pn = dijkstra(g, cost, start, alpha, max_seconds=half * 1.1)
     origin = g.node_pos(start)
-    ring = [(n, t) for n, t in secs.items() if 0.40 * half <= t <= 0.85 * half]
+    # Turn around near the far edge of what half the budget reaches. Sitting
+    # the ring at 0.40 of it wasted most of the budget: from Munich a 4-hour
+    # ask came back as a 112-minute suburban potter.
+    ring = [(n, t) for n, t in secs.items() if 0.62 * half <= t <= 1.0 * half]
     if not ring:
         return []
+
+    # A turnaround has to be somewhere worth turning around AT. From a city
+    # origin the time ring lands in the suburbs -- Munich's built-up radius is
+    # about 10 km, and 20 minutes of city-speed travel does not clear it -- so
+    # a ring picked on time alone buys a fast escape into nothing.
+    rural = [(n, t) for n, t in ring if g.urban_of_node(n) <= RURAL_MAX]
+    escaped = bool(rural)
+    if rural:
+        ring = rural
 
     buckets: dict[int, list] = defaultdict(list)
     for node, t in ring:
@@ -350,11 +448,25 @@ def joyride(g: RoadGraph, cost: RoadCost, start: int, minutes: float,
         if not back:
             continue
         r = build(g, cost, out_segs + back, start)
-        if r["kpis"]["km"] < 5 or r["kpis"]["minutes"] > minutes * 1.15:
+        if r["kpis"]["km"] < 5 or r["kpis"]["minutes"] > minutes * 1.08:
             continue
         r["bearing"] = round(bearing(origin, g.node_pos(turn)))
         r["overlap"] = round(len(used & set(back)) / max(len(used), 1), 2)
-        r["score"] = r["kpis"]["value"] / max(r["kpis"]["minutes"] / 60.0, 0.25)
+        r["turnaround_urban"] = round(g.urban_of_node(turn), 2)
+        r["escaped_town"] = escaped
+        r.update(_thirds(g, cost, out_segs + back))
+        # Rank on what the middle is worth, not the average. Averaging the
+        # scenic middle together with the two dull legs out and back is what
+        # makes every loop look the same.
+        # What makes a joyride good is the quality of the part that is not
+        # commuting, and how little of the ride is spent in traffic. Dividing
+        # value by hours -- the obvious "value per hour" -- ranks a short
+        # potter above a real ride, which is the opposite of what someone
+        # asking for three hours out wants.
+        used = min(1.0, r["kpis"]["minutes"] / minutes)
+        r["score"] = (r["middle_value"]
+                      * (1.0 - 0.5 * r["urban_share"])
+                      * (0.35 + 0.65 * used))
         loops.append(r)
 
     loops.sort(key=lambda r: -r["score"])
