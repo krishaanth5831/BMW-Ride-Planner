@@ -19,14 +19,5 @@ Built for the **BMW Motorrad track** at the TUM.ai EHL Zurich hackathon.
 
 ## Status
 
-Brainstorming. The tech stack is not chosen yet — this repo currently holds the
-branch structure and team workflow only.
-
-## How we work
-
-**Read [WORKFLOW.md](WORKFLOW.md) before you push anything.** It covers the
-branch layout, the daily loop, and what to do when git shouts at you. It is
-short on purpose.
-
-The one-line version: `main` is the demo, `dev` is where work lands, and you
-work on your own `feat/<yourname>/<thing>` branch.
+Brainstorming — the tech stack is not picked yet. Team workflow and branching
+conventions get set up once it is.
