@@ -1,0 +1,38 @@
+{
+  "cli_version": "0.10.2",
+  "checkpoint_id": "01M2BH1CFEN928T9PRQ7C71M0T",
+  "strategy": "manual-commit",
+  "branch": "dev",
+  "checkpoints_count": 2,
+  "files_touched": [
+    ".gitignore",
+    "README.md",
+    "engine/api.py",
+    "engine/profile.py",
+    "engine/router.py",
+    "engine/scoring.py",
+    "engine/sun.py",
+    "fixtures/osm/ways_47.60_11.15_48.25_11.80.json",
+    "precompute/build_osm_graph.py",
+    "precompute/fetch_osm.py",
+    "web/app.js",
+    "web/index.html",
+    "web/style.css"
+  ],
+  "sessions": [
+    {
+      "metadata": "/0/metadata.json",
+      "transcript": "/0/full.jsonl",
+      "compact_transcript": "/0/transcript.jsonl",
+      "content_hash": "/0/content_hash.txt",
+      "prompt": "/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 118,
+    "cache_creation_tokens": 88100,
+    "cache_read_tokens": 28349973,
+    "output_tokens": 65844,
+    "api_call_count": 59
+  }
+}
