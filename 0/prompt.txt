@@ -1,0 +1,17 @@
+now try
+
+---
+
+how can I set up the credentials in my cli
+
+---
+
+I have to change --hostname right?
+
+---
+
+how do  Icheck if its working
+
+---
+
+can you push something to readme to test if the entire checkpoints are working
