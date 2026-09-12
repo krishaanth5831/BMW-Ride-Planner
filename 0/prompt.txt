@@ -1,0 +1,17 @@
+explain the algorithm to me in simple terms
+
+---
+
+based on the available data we have based on the apis and the dataset what are the alternative to calculating the scores per square. i just dont like the squares part but i still do like the 4 scoures cocept and the rest of the algorithm just propose an alternative to the square part
+
+---
+
+I like the osm ways split at junctions idea try to treat each junction as a node and then minimize the junctions needed to still reach the destination while taking the long and scenic route, and refine using kernel attribution. dont implement this yet but tell me if it would work well and how it would fit in.
+
+---
+
+what api do we call in order to check the curvature of the road?
+
+---
+
+then fix the issues with the 3 traps that you mentioned for the junction nodes idea, then refine the algorithm with that and update it and then push commit to dev then merge to main
