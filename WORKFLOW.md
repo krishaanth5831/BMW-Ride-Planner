@@ -83,7 +83,13 @@ A PR nobody knows about is a PR nobody reviews.
 - One other person reviews and approves. Not both — one is enough, we are three
   people and one of them wrote it.
 - **The reviewer or the author clicks merge. A human always does the merging.**
-- After merging, delete the branch (GitHub offers a button).
+- The branch is deleted automatically once it merges.
+
+> On `dev`, GitHub requires the pull request but does **not** hard-require the
+> approval. That is deliberate: at 3am with one person asleep, you should be
+> able to self-merge your own work rather than sit blocked. Getting a review is
+> the team rule; the PR itself is the enforced part, so every change is still
+> visible to everyone. On `main` the approval **is** enforced — see section 5.
 
 ### Then start clean
 
@@ -166,8 +172,8 @@ safe while people keep hacking on `dev`.
 gh pr create --base main --head dev --title "Release: <what's in it>"
 ```
 
-Someone approves it, a human merges it. That is the only way code reaches
-`main`.
+One other person must approve it — GitHub enforces this on `main` — and then a
+human merges it. That is the only way code reaches `main`.
 
 Rule of thumb: if `dev` is broken, fine, fix it. If `main` is broken during
 judging, that is the whole hackathon.
@@ -271,7 +277,7 @@ once. Optional; the GitHub website does the same job.
 ## 8. The rules, in one place
 
 1. Never push directly to `main`. (GitHub enforces this.)
-2. Never push directly to `dev` — go through a PR.
+2. Never push directly to `dev` — go through a PR. (GitHub enforces this too.)
 3. Always branch off a freshly pulled `dev`.
 4. One PR per task, reviewed by one other person, merged by a human.
 5. Push your work before you stop for the day, finished or not.
