@@ -54,6 +54,15 @@
   </fieldset>
 
   <fieldset>
+    <legend>Geometry</legend>
+    <label><input type="radio" name="eng" value="roads" checked> Real roads (OSM)</label>
+    <label><input type="radio" name="eng" value="cells"> Square lattice</label>
+    <div class="note">Same distortion, same morton-cell scores in both. Only
+      where the line is <i>drawn</i> changes — the lattice joins square centres,
+      so it staircases and can cut across fields.</div>
+  </fieldset>
+
+  <fieldset>
     <legend>Mode 1 — A to B</legend>
     <div class="note">Click the map to set <b>start</b>, then <b>goal</b>.</div>
     <button id="go" disabled>Route A → B</button>
@@ -84,6 +93,7 @@ const layers = { coverage: L.layerGroup().addTo(map), routes: L.layerGroup().add
 let start = null, goal = null;
 
 const $ = id => document.getElementById(id);
+const engine = () => document.querySelector('input[name=eng]:checked').value;
 const fmt = n => (Math.round(n * 10) / 10).toLocaleString();
 
 async function j(url, body) {
@@ -163,6 +173,10 @@ function draw(routes, extra) {
       <div class="kpi"><span>risk</span><b>${k.risk}</b></div>
       <div class="kpi"><span>mean lean</span><b>${k.mean_lean_deg}°</b></div>
       <div class="kpi"><span>climb</span><b>${fmt(k.elev_gain_m)} m</b></div>
+      ${k.crowd_covered_pct !== undefined ?
+        `<div class="kpi"><span>crowd coverage</span><b>${k.crowd_covered_pct}%</b></div>` : ''}
+      ${r.roads && r.roads.length ?
+        `<div class="kpi" style="display:block;margin-top:5px">via ${r.roads.slice(0,4).join(' · ')}</div>` : ''}
     </div>`);
   });
   $('out').innerHTML = (extra ? `<div class="note">${extra}</div>` : '') + cards.join('');
@@ -178,7 +192,7 @@ async function run(btn, fn) {
 
 $('go').onclick = () => run($('go'), async () => {
   const d = await j('/api/cells/route',
-    { start, goal, lean_p95: +$('lean').value });
+    { start, goal, lean_p95: +$('lean').value, engine: engine() });
   draw(d.routes, `Hard safety gate removed <b>${d.excluded_squares.toLocaleString()}</b>
     squares for a ${d.lean_p95}° rider.` +
     (d.routes.length ? '' : ' Every road connecting these two points is beyond ' +
@@ -187,7 +201,8 @@ $('go').onclick = () => run($('go'), async () => {
 
 $('loop').onclick = () => run($('loop'), async () => {
   const d = await j('/api/cells/joyride',
-    { origin: start, minutes: +$('min').value, lean_p95: +$('lean').value });
+    { origin: start, minutes: +$('min').value, lean_p95: +$('lean').value,
+      engine: engine() });
   draw(d.routes, `Out on the fun-weighted cost, back with a reuse penalty.`);
 });
 </script>

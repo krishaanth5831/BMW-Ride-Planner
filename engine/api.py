@@ -342,9 +342,10 @@ if os.path.isdir(WEB):
 # same machine at /cells.
 # ---------------------------------------------------------------------------
 
+from engine import cell_osm_router as _croads  # noqa: E402
 from engine import cell_router as _cells  # noqa: E402
 
-_cell_state: dict = {"graph": None}
+_cell_state: dict = {"graph": None, "roads": None}
 
 
 def get_cell_graph():
@@ -357,6 +358,19 @@ def get_cell_graph():
             )
         _cell_state["graph"] = _cells.load(path)
     return _cell_state["graph"]
+
+
+def get_road_graph():
+    """OSM geometry with morton-cell costs. Built once; ~3 s and ~66k segments."""
+    if _cell_state["roads"] is None:
+        path = os.path.join(DATA, "cell_graph.json")
+        if not os.path.exists(path):
+            raise HTTPException(
+                503,
+                "No crowd graph yet. Run:  python3 precompute/build_cell_graph.py",
+            )
+        _cell_state["roads"] = _croads.load(path)
+    return _cell_state["roads"]
 
 
 def _cost(g, lean_p95: float, weather: float = 0.0):
@@ -389,45 +403,94 @@ def cells_coverage(limit: int = 20000, min_trips: int = 3):
     ]}
 
 
+def _in_bbox(pt) -> bool:
+    s, w, n, e = _croads.BBOX
+    return s <= pt[0] <= n and w <= pt[1] <= e
+
+
 @app.post("/api/cells/route")
 def cells_route(body: dict):
-    """Mode 1: A -> B at three alphas, plus the squares the gate removed."""
-    g = get_cell_graph()
+    """Mode 1: A -> B at three alphas.
+
+    `engine` picks where the line is DRAWN, not how it is scored. Both run the
+    identical distortion with the identical morton-cell terms:
+
+      "roads" (default) -- OSM geometry and connectivity, cell scores
+      "cells"           -- the pure lattice, square centres joined up
+    """
+    engine = body.get("engine", "roads")
     lean = float(body.get("lean_p95", 35.0))
-    cost = _cost(g, lean, float(body.get("weather", 0.0)))
-    start = g.nearest(*body["start"])
-    goal = g.nearest(*body["goal"])
-    if start is None or goal is None:
-        raise HTTPException(400, "could not snap those points to ridden squares")
-    routes = _cells.plan_destination(g, cost, start, goal)
-    excluded = sum(1 for c in g.cells.values() if cost.excluded(c))
+    weather = float(body.get("weather", 0.0))
+    cg = get_cell_graph()
+    cost_cells = _cost(cg, lean, weather)
+
+    if engine == "cells":
+        start, goal = cg.nearest(*body["start"]), cg.nearest(*body["goal"])
+        if start is None or goal is None:
+            raise HTTPException(400, "could not snap those points to ridden squares")
+        routes = _cells.plan_destination(cg, cost_cells, start, goal)
+        snapped = ([cg.cells[start]["lat"], cg.cells[start]["lon"]],
+                   [cg.cells[goal]["lat"], cg.cells[goal]["lon"]])
+        keys = ("label", "alpha", "coords", "kpis")
+    else:
+        if not (_in_bbox(body["start"]) and _in_bbox(body["goal"])):
+            s, w, n, e = _croads.BBOX
+            raise HTTPException(
+                400,
+                f"Road routing covers {s}-{n} N, {w}-{e} E only -- the cached "
+                f"Overpass tiles. Widen it deliberately with "
+                f"`python3 -m precompute.fetch_osm --bbox ...`, not from a map "
+                f"click. Or switch to the cell engine, which covers everywhere "
+                f"the crowd rode.",
+            )
+        g = get_road_graph()
+        cost = _croads.RoadCost(g, cost_cells)
+        start, goal = (g.nearest_node(*body["start"]), g.nearest_node(*body["goal"]))
+        if start is None or goal is None:
+            raise HTTPException(400, "could not snap those points to a road")
+        routes = _croads.plan_destination(g, cost, start, goal)
+        snapped = (list(g.node_pos(start)), list(g.node_pos(goal)))
+        keys = ("label", "alpha", "coords", "kpis", "roads")
+
     return {
-        "start": [g.cells[start]["lat"], g.cells[start]["lon"]],
-        "goal": [g.cells[goal]["lat"], g.cells[goal]["lon"]],
-        "excluded_squares": excluded,
+        "engine": engine,
+        "start": snapped[0],
+        "goal": snapped[1],
+        "excluded_squares": sum(1 for c in cg.cells.values() if cost_cells.excluded(c)),
         "lean_p95": lean,
-        "routes": [{k: r[k] for k in ("label", "alpha", "coords", "kpis")}
-                   for r in routes],
+        "routes": [{k: r[k] for k in keys} for r in routes],
     }
 
 
 @app.post("/api/cells/joyride")
 def cells_joyride(body: dict):
     """Mode 2: X minutes from here, back to here."""
-    g = get_cell_graph()
+    engine = body.get("engine", "roads")
     lean = float(body.get("lean_p95", 35.0))
-    cost = _cost(g, lean, float(body.get("weather", 0.0)))
-    start = g.nearest(*body["origin"])
-    if start is None:
-        raise HTTPException(400, "could not snap that point to a ridden square")
-    loops = _cells.joyride(g, cost, start, float(body.get("minutes", 90)),
-                           alpha=float(body.get("alpha", 3.0)))
-    return {
-        "origin": [g.cells[start]["lat"], g.cells[start]["lon"]],
-        "routes": [{k: r[k] for k in
-                    ("label", "bearing", "overlap", "coords", "kpis")}
-                   for r in loops],
-    }
+    minutes = float(body.get("minutes", 90))
+    alpha = float(body.get("alpha", 3.0))
+    cg = get_cell_graph()
+    cost_cells = _cost(cg, lean, float(body.get("weather", 0.0)))
+
+    if engine == "cells":
+        start = cg.nearest(*body["origin"])
+        if start is None:
+            raise HTTPException(400, "could not snap that point to a ridden square")
+        loops = _cells.joyride(cg, cost_cells, start, minutes, alpha=alpha)
+        origin = [cg.cells[start]["lat"], cg.cells[start]["lon"]]
+        keys = ("label", "bearing", "overlap", "coords", "kpis")
+    else:
+        if not _in_bbox(body["origin"]):
+            raise HTTPException(400, "origin is outside the cached road tiles")
+        g = get_road_graph()
+        start = g.nearest_node(*body["origin"])
+        loops = _croads.joyride(g, _croads.RoadCost(g, cost_cells), start,
+                                minutes, alpha=alpha)
+        origin = list(g.node_pos(start))
+        keys = ("label", "bearing", "overlap", "coords", "kpis", "roads")
+
+    return {"engine": engine, "origin": origin,
+            "routes": [{k: r[k] for k in keys} for r in loops]}
 
 
 if os.path.isdir(WEB):
