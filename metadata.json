@@ -1,0 +1,40 @@
+{
+  "cli_version": "0.10.2",
+  "checkpoint_id": "01M2BE9RPHW0YNJ38X11KS3MDK",
+  "strategy": "manual-commit",
+  "branch": "dev",
+  "checkpoints_count": 1,
+  "files_touched": [
+    ".env.example",
+    ".gitignore",
+    "README.md",
+    "engine/__init__.py",
+    "engine/api.py",
+    "engine/profile.py",
+    "engine/router.py",
+    "engine/scoring.py",
+    "engine/weather.py",
+    "precompute/__init__.py",
+    "precompute/build_graph.py",
+    "precompute/morton.py",
+    "web/app.js",
+    "web/index.html",
+    "web/style.css"
+  ],
+  "sessions": [
+    {
+      "metadata": "/0/metadata.json",
+      "transcript": "/0/full.jsonl",
+      "compact_transcript": "/0/transcript.jsonl",
+      "content_hash": "/0/content_hash.txt",
+      "prompt": "/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 82,
+    "cache_creation_tokens": 452182,
+    "cache_read_tokens": 15901933,
+    "output_tokens": 58488,
+    "api_call_count": 41
+  }
+}
