@@ -35,22 +35,40 @@ GRID = 1 << LEVEL_NODE
 DATASET = os.environ.get(
     "BMW_DATASET", os.path.expanduser("~/Desktop/BMW/exd_download/datasetHackathon"))
 
+# ---------------------------------------------------------------------------
+# (*) PROVENANCE MARKER
+# A trailing  (*)  marks a number WE CHOSE OURSELVES -- not from the BMW
+# dataset, an API, or the BMW brief. Unmarked values are traceable to a source,
+# named in the comment. Full inventory: plan/PROVENANCE.md
+# ---------------------------------------------------------------------------
+
+# NOT invented: both come from BMW's own tripViewer (app.js:52 LEAN_STEP_NOISE,
+# app.js:56 LEAN_STRAIGHT). We use their thresholds so our curviness matches
+# the definition they shipped.
 LEAN_STEP_NOISE = 2.0
 LEAN_STRAIGHT = 5.0
-MAX_STEP_M = 150.0
+# (*) GPS-dropout cutoff. Derived from the level-18 cell diagonal rather than
+# stated anywhere, so: our choice, informed by geometry.
+MAX_STEP_M = 150.0     # (*)
+# NOT invented: measured from the data. ridingabsbraking takes values 0/1/2/3
+# with 1 dominant; 2 and 3 are the engaged states.
 ABS_ENGAGED = 2
 
 # Snapping tolerance. BMW's map-matched positions sit a measured ~16 m from raw
 # GPS with 62% inside 5 m, so they are already on road centrelines; 45 m is
 # generous enough for that spread without leaping to a parallel road.
-SNAP_MAX_M = 45.0
-# Index cell for candidate lookup (~400 m at this latitude).
-INDEX_LEVEL = 16
+# (*) Our tolerance, but informed by a measurement: map-matched positions sit a
+# measured mean 16 m from raw GPS with 62% inside 5 m.
+SNAP_MAX_M = 45.0      # (*)
+# (*) Index cell for candidate lookup (~400 m at this latitude). Purely an
+# implementation detail -- affects speed, not results.
+INDEX_LEVEL = 16       # (*)
 INDEX_GRID = 1 << INDEX_LEVEL
 
-# Default assumed speeds by road class (km/h), used only where the crowd has
-# never been. Observed speed always wins when we have it.
-CLASS_SPEED = {
+# (*) Assumed speeds by road class (km/h). Used ONLY where the crowd has never
+# ridden; observed speed always wins where we have it. OSM `maxspeed` is parsed
+# but not yet preferred over these, which it should be.
+CLASS_SPEED = {        # every value (*)
     "motorway": 120, "motorway_link": 80,
     "trunk": 95, "trunk_link": 70,
     "primary": 80, "primary_link": 60,
@@ -58,10 +76,11 @@ CLASS_SPEED = {
     "tertiary": 60, "tertiary_link": 50,
     "unclassified": 50,
 }
-# Scenic desirability of the road class itself. The brief's red flags are inner
-# city and standstills; its green flags are curves and clear road view. A
-# motorway is fast and safe and completely unscenic.
-CLASS_SCENIC = {
+# (*) Scenic desirability of each road class -- the single most opinionated
+# table in the project, and entirely ours. The BRIEF supports the direction
+# (inner city and standstills are red flags; curves and clear road view are
+# green), but the numbers themselves are judgement, not measurement.
+CLASS_SCENIC = {       # every value (*)
     "motorway": 0.02, "motorway_link": 0.05,
     "trunk": 0.25, "trunk_link": 0.25,
     "primary": 0.50, "primary_link": 0.45,
@@ -171,7 +190,7 @@ def ways_to_segments(ways: list[dict]) -> list[dict]:
     return segments
 
 
-CHUNK_M = 100.0
+CHUNK_M = 100.0        # (*) scoring resolution, our choice
 
 
 def subdivide(segments: list[dict]) -> list[dict]:

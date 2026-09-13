@@ -37,10 +37,10 @@ from precompute.fetch_osm import ENDPOINT, PAUSE_S, RETRIES, USER_AGENT  # noqa:
 CACHE = os.path.join(ROOT, "fixtures", "scenic")
 
 # Same box as the cached road tiles: Munich south into the Alps.
-BBOX = (47.60, 11.15, 48.25, 11.80)
+BBOX = (47.60, 11.15, 48.25, 11.80)   # (*) our chosen demo region
 
-MIN_LAKE_M2 = 150_000       # ~0.15 km2: Starnberger See yes, village pond no
-MIN_PEAK_M = 1_000          # metres; below this it is a hill, not a view
+MIN_LAKE_M2 = 150_000   # (*) ~0.15 km2: Starnberger See yes, village pond no
+MIN_PEAK_M = 1_000      # (*) metres; below this we call it a hill, not a view
 
 
 def _query(south: float, west: float, north: float, east: float) -> str:

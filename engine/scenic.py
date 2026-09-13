@@ -39,11 +39,13 @@ SCENIC_DIR = os.path.join(ROOT, "fixtures", "scenic")
 # Kept deliberately narrow. A 100-260 sector still admits the ponds on the
 # eastern edge of Munich, which is how a "scenic ride" came back as 88% inside
 # the city. The lakes and the Alps are genuinely south to south-west.
-SOUTH_SECTOR = (140.0, 235.0)
+# (*) What counts as a "south-facing" view. Our own sector, not a standard.
+SOUTH_SECTOR = (140.0, 235.0)   # (*)
 
 # A POI is "visited" if the route passes this close. Riding past the far shore
 # of a lake still counts as riding to the lake.
-VISIT_M = 700.0
+# (*) How near a feature has to be to count as "you can see it from the road".
+VISIT_M = 700.0                 # (*)
 
 
 def load_pois(path: str | None = None) -> list[dict]:

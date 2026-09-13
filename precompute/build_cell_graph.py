@@ -30,17 +30,17 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from precompute.morton import LEVEL_NODE, cell_center, morton_code  # noqa: E402
 
 # 1.5x the level-18 cell diagonal, per section 4.
-MAX_GAP_M = 150.0
-MIN_TRIPS = 2
+MAX_GAP_M = 150.0   # (*) GPS-dropout cutoff, from cell geometry
+MIN_TRIPS = 2       # (*) trips needed before an edge is trusted
 
 # Percentiles need samples, and there are ~1M squares. Keep a small reservoir
 # per square instead of every value: 32 samples pins p50/p90/p95 closely enough
 # for a cost multiplier and keeps the whole pass in memory.
-RESERVOIR = 32
+RESERVOIR = 32      # (*) sampling size, implementation detail
 
 # Region gate. The crowd data is Bavaria-centric; bounding it keeps the square
 # count finite and the aggregation honest about where we actually have riders.
-BBOX = (47.0, 9.8, 49.4, 13.4)   # south, west, north, east
+BBOX = (47.0, 9.8, 49.4, 13.4)   # (*) our chosen region; south, west, north, east
 
 
 def _f(row: dict, key: str):

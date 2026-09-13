@@ -52,20 +52,30 @@ def sun_position(when: dt.datetime, lat: float, lon: float) -> tuple[float, floa
 # Light bands. Below the horizon there is progressively less to look at, but the
 # road is still rideable -- so scenery decays, it does not vanish.
 def daylight_factor(elev_deg: float) -> float:
+    """(*) Every factor below is ours.
+
+    The sun ANGLES are real astronomy -- civil twilight ends at -6 deg and
+    nautical at -12 deg by definition. How much scenery is worth at each of
+    those stages is a judgement we made up.
+    """
     if elev_deg >= 5:
-        return 1.0
+        return 1.0          # (*)
     if elev_deg >= 0:
-        return 0.95
-    if elev_deg >= -6:      # civil twilight
-        return 0.55
-    if elev_deg >= -12:     # nautical twilight
-        return 0.25
-    return 0.12             # night
+        return 0.95         # (*)
+    if elev_deg >= -6:      # civil twilight (angle: real)
+        return 0.55         # (*)
+    if elev_deg >= -12:     # nautical twilight (angle: real)
+        return 0.25         # (*)
+    return 0.12             # (*) night
 
 
 def golden_hour_strength(elev_deg: float) -> float:
-    """1.0 with the sun low and warm, 0 once it is high or gone."""
-    if elev_deg <= -4 or elev_deg >= 12:
+    """1.0 with the sun low and warm, 0 once it is high or gone.
+
+    (*) The -4 to +12 degree window is a photographers' rule of thumb, not a
+    defined quantity, and the 0.6 taper below the horizon is ours.
+    """
+    if elev_deg <= -4 or elev_deg >= 12:        # (*) both bounds
         return 0.0
     if elev_deg < 0:
         return max(0.0, (elev_deg + 4) / 4) * 0.6

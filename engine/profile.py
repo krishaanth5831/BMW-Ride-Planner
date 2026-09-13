@@ -24,8 +24,12 @@ from precompute.build_osm_graph import (ABS_ENGAGED, GRID, LEAN_STEP_NOISE,
 TASTE_FEATURES = ("curviness", "leaned_share", "speed_mean", "band_share", "elev_mean")
 
 # Safety margin on top of the rider's demonstrated style (section 6, channel 2).
-CAPABILITY_MARGIN = 1.15
-BIKE_MARGIN = {"sport": 1.25, "roadster": 1.15, "tourer / adventure": 1.05}
+# (*) How much headroom to allow beyond what a rider has demonstrably done is a
+# judgement call, not something the data states.
+CAPABILITY_MARGIN = 1.15   # (*)
+# (*) Bike MODEL is not in the dataset at all. Both the class inference and
+# these per-class margins are ours.
+BIKE_MARGIN = {"sport": 1.25, "roadster": 1.15, "tourer / adventure": 1.05}  # (*)
 
 
 def _percentile(values: list[float], q: float) -> float:
@@ -50,7 +54,10 @@ def _weighted_percentile(values: list[tuple[float, float]], q: float) -> float:
     return values[-1][0]
 
 
-EXPERIENCE_GATES = (
+# (*) Entirely our own banding. The dataset contains no rider skill label, no
+# licence class and no experience field -- these thresholds and the names
+# attached to them are invented.
+EXPERIENCE_GATES = (       # every value (*)
     (0.4, "novice", 3.0),
     (0.65, "intermediate", 5.0),
     (0.85, "advanced", 8.0),

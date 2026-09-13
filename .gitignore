@@ -55,3 +55,6 @@ fixtures/weather/
 # Overpass per-tile intermediates; the combined ways_*.json is kept so the demo
 # does not depend on Overpass being reachable.
 fixtures/osm/tile_*.json
+
+# The BMW dataset itself — 20 GB. Never commit it.
+exd_download/
