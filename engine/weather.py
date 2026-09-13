@@ -53,25 +53,30 @@ def fetch(lat: float, lon: float) -> dict:
     precip = cur.get("precipitation") or 0.0
     gust = cur.get("wind_gusts_10m") or 0.0
 
-    # Risk contribution, 0..1.
+    # (*) Risk contribution, 0..1. The MEASUREMENTS are real Open-Meteo values
+    # (precipitation, temperature, gusts); how much each one raises risk is our
+    # judgement. The 8 C threshold is the one exception -- BMW's brief names
+    # temperature as a red flag, though not that exact number.
     risk = 0.0
     if precip > 0:
-        risk += min(0.5, 0.15 + precip * 0.1)
+        risk += min(0.5, 0.15 + precip * 0.1)   # (*)
     if temp is not None and temp < 8:
-        risk += 0.2          # a red flag named in BMW's brief
+        risk += 0.2                              # (*) magnitude; threshold from the brief
     if gust > 45:
-        risk += 0.15
+        risk += 0.15                             # (*) both threshold and magnitude
     risk = min(1.0, risk)
 
     # Weather shrinks the CEILING, which is what makes growth collapse to zero
     # in the wet without needing a separate rule.
+    # (*) Every factor here is ours. Nothing measures how much grip a rider
+    # actually loses in the wet -- these are conservative guesses.
     factor = 1.0
     if precip > 0:
-        factor = 0.7
+        factor = 0.7                             # (*)
     if precip > 0 and (temp is not None and temp < 8):
-        factor = 0.5
+        factor = 0.5                             # (*)
     if (cur.get("weather_code") or 0) in (71, 73, 75, 77, 85, 86):
-        factor = 0.0         # snow
+        factor = 0.0         # (*) snow -> no growth at all
 
     return {
         "available": True, "source": source,

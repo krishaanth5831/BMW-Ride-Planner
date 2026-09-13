@@ -32,12 +32,15 @@ from precompute.morton import LEVEL_COARSE, cell_center
 # slider. It is literally "how much extra time will you accept for a better
 # road". beta is the fixed safety weight.
 ALPHA_CHILL, ALPHA_BALANCED, ALPHA_SPORTIVE = 0.0, 1.5, 3.0
-BETA = 1.0
+# (*) Risk weighting in the cost function. Our choice.
+BETA = 1.0              # (*)
 
 # Section 8, property 3: safety is a HARD EXCLUSION, not a penalty. A soft
 # penalty can always be overwhelmed by a large enough fun bonus; an exclusion
 # cannot.
-LEAN_MARGIN_DEG = 8.0
+# (*) Headroom allowed above a rider's demonstrated lean. Nothing in the data
+# says how much is safe -- this is a conservative guess.
+LEAN_MARGIN_DEG = 8.0   # (*)
 
 
 class CellGraph:

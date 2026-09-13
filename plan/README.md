@@ -8,6 +8,7 @@ they own.
 
 | Doc | What's in it |
 |---|---|
+| [PROVENANCE.md](PROVENANCE.md) | **Where every number comes from.** Anything marked (*) in the code is a value we chose ourselves rather than measured — this is the inventory, and the answer to "where did that number come from?" |
 | [DATASET.md](DATASET.md) | What the BMW dataset actually contains — measured column fill rates, dead columns, geography, and the three claims in our notes the data cannot support |
 | [ALGORITHM.md](ALGORITHM.md) | **The main doc.** How a route is chosen end to end: segment snapping with kernel attribution, the junction-aware turn-expanded graph, the rider profile's three channels of influence, the learning system, KPI scoring, the cost function, both search modes, and how the algorithm explains itself |
 | [DATA_SOURCES.md](DATA_SOURCES.md) | The six external sources — OSM, Copernicus DEM, CLMS land cover, Open-Meteo, live traffic, government accident data — what each contributes, what it costs, and the build priority |
@@ -142,7 +143,7 @@ The brief names its evaluation metrics explicitly. Each one is earned:
 
 | Rubric metric | Delivered by |
 |---|---|
-| Usage of BMW **Crowd Data** | 85,699-trip segment aggregate, measured junction delays, congestion prior, and the exposure denominator for accident rates |
+| Usage of BMW **Crowd Data** | 85,699-trip segment aggregate (lean, curviness, observed speed, ABS) and the exposure denominator for accident rates. Junction delay and the congestion prior are *designed* to come from crowd data but are currently constants marked (*) — see [PROVENANCE.md](PROVENANCE.md) |
 | Usage of BMW **Personal Rider Data** | Revealed-preference weights, road-normalised style ratio, skill vector, fog map, records, growth targeting |
 | Usage of **External Sources** | OSM · Copernicus DEM · CLMS land cover · Open-Meteo (forecast **and** archive) · live traffic · government accident data — [DATA_SOURCES.md](DATA_SOURCES.md) |
 | **Scalability & Efficiency** | DuckDB over Parquet, morton-prefix bucketing of the snap join: 13 GB → ~30 MB served |

@@ -24,8 +24,12 @@ from precompute.build_osm_graph import haversine_m
 # becoming a motorway-seeking objective, since motorways have almost no
 # at-grade junctions. Values are SECONDS, so they stay commensurate with travel
 # time and cannot blow up into absurd detours.
-TURN_ATTENTION_S = 5.0
-JUNCTION_DEGREE_S = 3.0
+# (*) Both are guesses standing in for a measurement we have not made. The
+# designed version reads the delay straight off the crowd data -- observed speed
+# drop across each junction per turn per time band (plan/ALGORITHM.md section 4,
+# Fix 2). These are the documented tag-free fallback until that exists.
+TURN_ATTENTION_S = 5.0     # (*)
+JUNCTION_DEGREE_S = 3.0    # (*)
 MOTORWAY_TYPES = {"motorway", "motorway_link"}
 
 

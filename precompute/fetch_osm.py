@@ -30,13 +30,21 @@ CACHE = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 # Demo region: Munich south through Starnberg, Tegernsee and toward Kesselberg --
 # the roads rider A's own GPX files are named after.
-DEFAULT_BBOX = (47.60, 11.15, 48.25, 11.80)   # south, west, north, east
-TILE_DEG = 0.13
+# (*) Our chosen demo region and tile size -- they bound what the app can route
+# over, but no source dictates them. Munich south through Starnberg, Tegernsee
+# and toward Kesselberg, chosen because the crowd lake is densest there and
+# rider A's own GPX files are named after those roads.
+DEFAULT_BBOX = (47.60, 11.15, 48.25, 11.80)   # (*) south, west, north, east
+TILE_DEG = 0.13                                # (*)
 
 # Classes worth riding. residential/service/track are deliberately excluded:
 # they multiply the download several times over and are not where anyone rides
 # for pleasure. Link roads are kept because routing needs them for connectivity.
-HIGHWAY_RE = (
+# (*) Which road classes count as "rideable" is our call. residential/service/
+# track are excluded deliberately: they multiply the download several times over
+# and are not where anyone rides for pleasure -- but that IS an opinion, and it
+# means a start point on a quiet street snaps to the nearest larger road.
+HIGHWAY_RE = (          # (*)
     "^(motorway|trunk|primary|secondary|tertiary|unclassified"
     "|motorway_link|trunk_link|primary_link|secondary_link|tertiary_link)$"
 )

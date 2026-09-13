@@ -46,6 +46,23 @@ Heatmap mode looks for the same thing a rider does — a road that keeps turning
 
 Heatmap routing applies `highway_avoidance=1.0`, `twist_avoidance=2.5` and `traffic_avoidance=2.0`; legacy loop and point-to-point routing leave all three at `0.0` and are unchanged. Each route reports `twist_score`, `twisty_pct`, `traffic_pressure`, `max_road_run_km` and `long_straight_km` alongside the existing scenic, fun, personal, crowd-coverage, junction and elevation KPIs.
 
+## Where the numbers come from
+
+Anything marked **(\*)** in the code is a value **we chose ourselves** — not from
+the BMW dataset, an API, or the brief. Unmarked values are traceable to a named
+source.
+
+> The inputs are measured. The scoring is our opinion.
+
+Lean angle, curviness, observed speed, ABS events, terrain and weather are all
+real measurements. What makes a road *scenic* is a definition we wrote, and
+every weight lives in one file you can argue with. Full inventory:
+[plan/PROVENANCE.md](plan/PROVENANCE.md).
+
+Two things not to overclaim: **junction cost** and **traffic** are currently
+constants standing in for crowd-data measurements that are designed but not yet
+built. Both are marked (\*).
+
 ## Quick start
 
 ```bash

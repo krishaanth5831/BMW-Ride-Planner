@@ -41,7 +41,7 @@ FIXTURES = os.path.join(ROOT, "fixtures", "osm")
 # it, so the flagship route needs no network at all. A click outside is
 # refused rather than silently triggering an unbounded live Overpass fetch on
 # somebody's click path.
-BBOX = (47.60, 11.15, 48.25, 11.80)
+BBOX = (47.60, 11.15, 48.25, 11.80)   # (*) our chosen demo region
 
 # Keep the quick city escape, then strongly prefer riding roads once clear of
 # Munich. The penalty ramps in over 5 km so Dijkstra does not chase a sharp
@@ -61,11 +61,11 @@ STRAIGHT_MAX_EXTRA_COST = 3.0
 
 # ~2 km at this latitude. Big enough that one quiet street does not read as
 # countryside, small enough that a town does not smear across a valley.
-URBAN_CELL_DEG = 0.018
+URBAN_CELL_DEG = 0.018   # (*)
 
 # Below this a place counts as out of town, and is allowed to host a
 # turnaround.
-RURAL_MAX = 0.18
+RURAL_MAX = 0.18         # (*)
 
 
 class RoadGraph:
@@ -224,7 +224,8 @@ class CellLookup:
         return CLASS_SPEED.get(seg.get("highway"), self.region_speed)
 
 
-CLASS_SPEED = {
+# (*) Assumed speeds per road class, used only without observed data.
+CLASS_SPEED = {   # every value (*)
     "motorway": 120.0, "motorway_link": 70.0, "trunk": 100.0, "trunk_link": 60.0,
     "primary": 80.0, "primary_link": 50.0, "secondary": 70.0,
     "secondary_link": 45.0, "tertiary": 60.0, "tertiary_link": 40.0,

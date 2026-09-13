@@ -34,9 +34,9 @@ IDEAL_LO, IDEAL_HI = 14.0, 27.0
 COLD_FLOOR, HOT_CEIL = 4.0, 35.0
 
 GUST_OK, GUST_BAD = 25.0, 55.0          # km/h
-MIN_WINDOW_H = 2                        # shorter than this is not a ride
-GOOD_ENOUGH = 0.55                      # hour score that counts as rideable
-MAX_RIDE_TEMP_C = 30.0
+MIN_WINDOW_H = 2       # (*) shorter than this is not a ride -- our call
+GOOD_ENOUGH = 0.55     # (*) hour score that counts as rideable -- our threshold
+MAX_RIDE_TEMP_C = 30.0  # (*) above this, full kit stops being pleasant -- our call
 
 
 def _url(lat: float, lon: float, days: int) -> str:

@@ -26,26 +26,39 @@ import datetime as dt
 
 from engine import sun
 
+# ---------------------------------------------------------------------------
+# (*) PROVENANCE MARKER
+# A trailing  (*)  marks a number WE CHOSE OURSELVES. It does not come from the
+# BMW dataset, from an API, or from the BMW brief -- it is a tuned guess.
+# Anything NOT marked (*) is traceable to a source, named in the comment.
+# Full inventory: plan/PROVENANCE.md
+# ---------------------------------------------------------------------------
+
 # --- scenic mix (sums to 1 before the tunnel penalty) --------------------
-W_CLASS = 0.22
-W_ELEV = 0.15
-W_RELIEF = 0.15
-W_FOREST = 0.10
-W_WATER_VIEW = 0.10
-W_CURVE = 0.28
-W_FLOW = 0.0
-W_GRADIENT = 0.0
-W_BAND = 0.0
-TUNNEL_PENALTY = 0.35
+# Every weight below is our own judgement about what makes a road scenic.
+# Nothing in the dataset or the brief assigns these numbers.
+W_CLASS = 0.22          # (*)
+W_ELEV = 0.15           # (*)
+W_RELIEF = 0.15         # (*)
+W_FOREST = 0.10         # (*)
+W_WATER_VIEW = 0.10     # (*)
+W_CURVE = 0.28          # (*)
+W_FLOW = 0.0            # (*)
+W_GRADIENT = 0.0        # (*)
+W_BAND = 0.0            # (*)
+TUNNEL_PENALTY = 0.35   # (*)
 
 # Heatmap routes prefer rider roads over motorways without making highways
 # impossible. This is a positive cost multiplier, so Dijkstra remains valid.
-HIGHWAY_AVOIDANCE = {
+HIGHWAY_AVOIDANCE = {          # every value (*)
     "motorway": 5.0, "motorway_link": 4.0,
     "trunk": 3.0, "trunk_link": 2.5,
     "primary": 1.0, "primary_link": 0.8,
 }
-TRAFFIC_CLASS_PRIOR = {
+# (*) Congestion guess per road class. NOT measured. The real version derives
+# this from crowd median speed by time band (plan/ALGORITHM.md section 3);
+# until that is wired, these are placeholders.
+TRAFFIC_CLASS_PRIOR = {        # every value (*)
     "motorway": 0.55, "motorway_link": 0.45,
     "trunk": 0.45, "trunk_link": 0.35,
     "primary": 0.32, "primary_link": 0.25,
@@ -54,7 +67,7 @@ TRAFFIC_CLASS_PRIOR = {
     "unclassified": 0.05,
 }
 
-FUN_WEIGHTS = {
+FUN_WEIGHTS = {                # every value (*)
     "curviness": 0.40,
     "leaned_share": 0.20,
     "band_share": 0.15,
@@ -64,14 +77,16 @@ FUN_WEIGHTS = {
 }
 
 # --- risk (kept as a cost multiplier; safety is not a preference) --------
-W_ABS = 0.45
-W_DECEL = 0.25
-W_CRAWL = 0.30
-W_WEATHER = 1.00
+# The INPUTS are measured (ABS engagements, decelerations, crawl share all come
+# from BMW telemetry). How much each one matters is our call.
+W_ABS = 0.45            # (*)
+W_DECEL = 0.25          # (*)
+W_CRAWL = 0.30          # (*)
+W_WEATHER = 1.00        # (*)
 
 # A segment needs roughly this many trips before its crowd-measured curviness is
 # trusted outright. Below it, geometry carries more of the weight.
-CONFIDENCE_K = 5.0
+CONFIDENCE_K = 5.0      # (*)
 
 
 class Percentiles:

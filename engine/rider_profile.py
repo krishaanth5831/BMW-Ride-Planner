@@ -24,14 +24,16 @@ from precompute.morton import LEVEL_NODE
 # Revs per km/h. A sport bike is geared to sit high in the rev range at road
 # speed; a big tourer loafs. Measured over the whole ride, so one hard
 # acceleration does not reclassify the bike.
-SPORT_RPM_PER_KMH = 60.0
-ROADSTER_RPM_PER_KMH = 42.0
+# (*) Bike MODEL is absent from the dataset. These rpm-per-km/h cut-offs, the
+# class names, the headroom per class and the experience bands are all ours.
+SPORT_RPM_PER_KMH = 60.0       # (*)
+ROADSTER_RPM_PER_KMH = 42.0    # (*)
 
 # What the rider's own lean ceiling allows for, by family: a sport bike has
 # more angle available than the rider has used, a loaded tourer has less.
-BIKE_HEADROOM = {"sport": 1.25, "roadster": 1.15, "tourer / adventure": 1.05}
+BIKE_HEADROOM = {"sport": 1.25, "roadster": 1.15, "tourer / adventure": 1.05}  # (*)
 
-EXPERIENCE = ((0.75, "advanced"), (0.45, "intermediate"), (0.0, "novice"))
+EXPERIENCE = ((0.75, "advanced"), (0.45, "intermediate"), (0.0, "novice"))    # (*)
 
 
 def _pct(v: list[float], q: float) -> float:
