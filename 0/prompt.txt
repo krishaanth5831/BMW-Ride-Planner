@@ -1,0 +1,55 @@
+just make a new branch and do it in the original algorithm with the mortom codes and the tricking the dijkstra algorithm find it in the commits and pushes and use that algorithm and shor it to me
+
+---
+
+<task-notification>
+<task-id>bm1sthbou</task-id>
+<tool-use-id>toolu_01ScUhTpzjRyLg1twPXgdSXd</tool-use-id>
+<output-file>/tmp/claude-1000/-home-krishaanth-Desktop-personal-projects-BMW-Ride-Planner/52c16b09-5ac4-4976-bb42-475d20a96bd3/tasks/bm1sthbou.output</output-file>
+<status>completed</status>
+<summary>Background command "Wait for graph build completion" completed (exit code 0)</summary>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>bxm3y36fn</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/tmp/claude-1000/-home-krishaanth-Desktop-personal-projects-BMW-Ride-Planner/52c16b09-5ac4-4976-bb42-475d20a96bd3/tasks/bxm3y36fn.output</output-file>
+<status>completed</status>
+<summary>Background command "Wait for rebuild" completed (exit code 0)</summary>
+</task-notification>
+
+---
+
+okay so open the dev server so i can see it
+
+---
+
+the route does not stay on actual paths and its just random geometric shapes use this for the api keys, https://overpass-api.de/api/interpreter, sh-f05aa956-bb3b-45b1-b316-6909e83b3d5b, REDACTED, fix that use these keys
+
+---
+
+I need to be able to see the maps tho
+
+---
+
+also if the starting point is in the city and you want to do like a round trip you need to get out of the city as fast as possible and once out of the city there should be a small like joyride in the scenic areas then come back to the same area, and I need
+
+---
+
+First commit push everything to dev then pr to main then and also when trying to exit the city try to exit towards the quickest way to the south of Munich because that is the area with the most scenic routes. Thesein the picture are all the features I want and I want you to make it into an end to end product we can give to a customer so they automatically get notifications when they should go for a ride and make it like a demo so we can present this. And use any ui design skills you have to built it into nice ui with a good Color scheme and all that.
+
+---
+
+commit and push to dev then merge to main
+
+---
+
+<task-notification>
+<task-id>buz61kdmg</task-id>
+<tool-use-id>toolu_01LenngTL95VMiRuJnFbgovt</tool-use-id>
+<output-file>/tmp/claude-1000/-home-krishaanth-Desktop-personal-projects-BMW-Ride-Planner/52c16b09-5ac4-4976-bb42-475d20a96bd3/tasks/buz61kdmg.output</output-file>
+<status>killed</status>
+<summary>Background command "Wait for build to finish" was stopped because the system is running low on memory</summary>
+</task-notification>
