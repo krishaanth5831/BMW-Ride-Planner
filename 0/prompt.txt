@@ -1,0 +1,13 @@
+commit push everything and then pr to main
+
+---
+
+start a dev server
+
+---
+
+what are some unique features we can add to this
+
+---
+
+build the fog map
