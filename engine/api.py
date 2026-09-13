@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import os
+import random
 import shutil
 import tempfile
 import zipfile
@@ -567,6 +568,7 @@ if os.path.isdir(WEB):
 # view of the same machinery.
 # ---------------------------------------------------------------------------
 
+from engine import cache as _cache  # noqa: E402
 from engine import fog as _fog  # noqa: E402
 from engine import replay as _replay  # noqa: E402
 from engine import rider_profile as _profile  # noqa: E402
@@ -679,6 +681,12 @@ def ride_suggest(body: dict):
     if not got["routes"]:
         # Fall back to the bearing joyride rather than showing nothing -- and
         # say which one the rider is looking at.
+        #
+        # Note the fallback is seed-INVARIANT, and cannot honestly be made
+        # otherwise here: for rider A at 150 minutes exactly one loop clears
+        # the 10% overlap cap, so there is nothing to choose between. Jittering
+        # alpha was tried and changes nothing. Making this vary means either
+        # relaxing that cap or fixing the chain, not adding randomness.
         loops = _croads.joyride(g, cost, origin, minutes,
                                 alpha=float(body.get("alpha", 3.0)))
         loops = _scenic.rank_loop_fallbacks(
@@ -874,7 +882,13 @@ def ride_replay(rider: str):
         folder = os.path.join(DATASET, RIDERS[rider], "recordedTrips")
         if not os.path.isdir(folder):
             raise HTTPException(503, f"rider data not found at {folder}")
-        got = _replay.best_trip(folder)
+        # Same disk cache as the profiles: picking the best ride means parsing
+        # 40 trips, and the answer only changes when the trip files do.
+        trips = _replay.list_trips(folder)
+        got = _cache.derived_json(
+            f"replay-{rider}.json",
+            _cache.signature(trips, "replay-v1"),
+            lambda: _replay.best_trip(folder))
         if not got:
             raise HTTPException(404, "no usable recorded ride for this rider")
         _ride_state[key] = got
