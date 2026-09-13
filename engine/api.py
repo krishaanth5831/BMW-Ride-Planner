@@ -574,11 +574,13 @@ if os.path.isdir(WEB):
 # view of the same machinery.
 # ---------------------------------------------------------------------------
 
+from engine import fog as _fog  # noqa: E402
+from engine import replay as _replay  # noqa: E402
 from engine import rider_profile as _profile  # noqa: E402
 from engine import rideworthy as _weather  # noqa: E402
 from engine import scenic as _scenic  # noqa: E402
 
-_ride_state: dict = {"index": None, "profiles": {}}
+_ride_state: dict = {"index": None, "profiles": {}, "rider_index": {}}
 
 RIDERS = {"A": "exampleUserA", "B": "exampleUserB", "C": "exampleUserC"}
 
@@ -662,7 +664,7 @@ def ride_suggest(body: dict):
     origin = g.nearest_node(*origin_ll)
 
     got = _scenic.plan_scenic_loop(
-        g, cost, get_scenic_index(), origin, minutes,
+        g, cost, get_rider_index(rider), origin, minutes,
         alpha=float(body.get("alpha", 3.0)),
         max_stops=int(body.get("max_stops", 3)),
         south_bias=body.get("south_bias"),
@@ -676,7 +678,7 @@ def ride_suggest(body: dict):
         loops = _croads.joyride(g, cost, origin, minutes,
                                 alpha=float(body.get("alpha", 3.0)))
         loops = _scenic.rank_loop_fallbacks(
-            loops, get_scenic_index(),
+            loops, get_rider_index(rider),
             rider if rider in _scenic.RIDER_TYPES else "A",
             minutes, p, body.get("seed"))
         if loops:
@@ -712,6 +714,168 @@ def ride_suggest(body: dict):
                      "visited", "value_thirds", "urban_share",
                      "personalization", "spot_search")}],
     }
+
+
+def _rider_cost(g, p, weather: float = 0.0, escape: bool = True):
+    cg = get_cell_graph()
+    return _croads.RoadCost(
+        g, _cells.Cost(cg, _cells.Rider(cg, ridden=p.get("ridden_squares"),
+                                        lean_p95=p.get("lean_ceiling") or 35.0),
+                       weather),
+        escape=escape)
+
+
+def get_rider_index(rider: str):
+    """Scenic POIs plus the good roads THIS rider has never ridden.
+
+    The fog map's red roads are more useful as destinations than as an
+    overlay: giving the planner a reason to go somewhere new is what stops it
+    offering the same lakes every time. They are snapped through the same
+    ScenicIndex as the Overpass POIs, so nothing downstream needs a special
+    case -- only the candidate list gets longer and more personal.
+
+    Cached per rider: snapping is a brute-force nearest-node sweep, and the
+    answer only changes when the rider rides somewhere new.
+    """
+    rider = rider.upper()
+    if rider not in _ride_state["rider_index"]:
+        g = get_road_graph()
+        base = get_scenic_index()
+        p = get_profile(rider)
+        ridden = _fog.ridden_segments(g, p.get("ridden_squares"))
+        extra = _fog.unridden_pois(g, _rider_cost(g, p), ridden)
+        idx = _scenic.ScenicIndex(g, extra)
+        # ScenicIndex partitions the public POIs between the three rider
+        # styles, so each rider only sees its own share. These are not public
+        # POIs: they are derived from THIS rider's own coverage and belong to
+        # them, so they are stamped accordingly instead of falling to the "A"
+        # default and vanishing for everyone else.
+        for item in idx.pois:
+            item["rider_style_owner"] = rider
+        merged = _scenic.ScenicIndex.__new__(_scenic.ScenicIndex)
+        merged.g = g
+        merged.pois = list(base.pois) + list(idx.pois)
+        _ride_state["rider_index"][rider] = merged
+    return _ride_state["rider_index"][rider]
+
+
+@app.get("/api/ride/fog/{rider}")
+def ride_fog(rider: str, targets: int = 8):
+    """Which roads this rider has ridden, and the best ones they have not.
+
+    Counted in road-kilometres rather than grid squares, per plan/UI.md
+    section 5: "You have ridden 214 km of the 5,045 km down here" is a
+    sentence a rider feels; a percentage of squares is not.
+    """
+    p = get_profile(rider)
+    g = get_road_graph()
+    cg = get_cell_graph()
+    cost = _croads.RoadCost(
+        g, _cells.Cost(cg, _cells.Rider(cg, ridden=p.get("ridden_squares"),
+                                        lean_p95=p.get("lean_ceiling") or 35.0)))
+    out = _fog.build(g, cost, p.get("ridden_squares"), n_targets=targets)
+    out["rider"] = rider.upper()
+    out["home"] = p.get("home")
+    return out
+
+
+@app.post("/api/ride/discover")
+def ride_discover(body: dict):
+    """Plan a loop that goes to a road this rider has never ridden.
+
+    The fog map's whole point is to end in a ride. Same cost function, same
+    escape-the-city behaviour, one forced stop: the road they picked.
+    """
+    rider = (body.get("rider") or "A").upper()
+    p = get_profile(rider)
+    minutes = float(body.get("minutes") or p.get("typical_ride_min") or 150)
+    target = body.get("target")
+    if not target or len(target) != 2:
+        raise HTTPException(400, "target must be [lat, lon]")
+    origin_ll = body.get("origin") or [p["home"]["lat"], p["home"]["lon"]]
+    if not (_in_bbox(origin_ll) and _in_bbox(target)):
+        raise HTTPException(400, "origin or target is outside the cached road tiles")
+
+    g = get_road_graph()
+    cg = get_cell_graph()
+    cost = _croads.RoadCost(
+        g, _cells.Cost(cg, _cells.Rider(cg, ridden=p.get("ridden_squares"),
+                                        lean_p95=p.get("lean_ceiling") or 35.0)),
+        escape=bool(body.get("escape", True)))
+    origin = g.nearest_node(*origin_ll)
+    stop_node = g.nearest_node(*target)
+    if origin is None or stop_node is None:
+        raise HTTPException(400, "could not snap to a road")
+
+    # Pinned as the ANCHOR of a normal scenic chain, not routed to and back.
+    # An out-and-back to one road retraces itself, which the chain builder
+    # rejects as a destination on a stick -- correctly. Going through it on a
+    # loop is both a better ride and the thing that passes that guard.
+    name = body.get("name") or "your new road"
+    got = _scenic.plan_scenic_loop(
+        g, cost, get_rider_index(rider), origin, minutes,
+        alpha=float(body.get("alpha", 3.0)),
+        max_stops=int(body.get("max_stops", 2)),
+        rider_id=rider if rider in _scenic.RIDER_TYPES else "A",
+        rider_profile=p,
+        must_include=(target[0], target[1], name),
+        # The rider picked this road, so a longer shared stretch is acceptable
+        # here in a way it would not be for a ride the planner invented. Still
+        # capped, so it cannot degenerate into out-and-back down one road.
+        retrace=(14_000.0, 0.22))
+    if not got or not got.get("routes"):
+        raise HTTPException(
+            404, got.get("reason")
+            or "That road will not fit inside this much time. Try longer.")
+
+    r = got["routes"][0]
+    # The chain builder falls through to another anchor when the pinned one
+    # cannot make a loop, which is right for a joy ride and wrong here: the
+    # rider asked for THAT road. Offering a different one without saying so
+    # would be the planner quietly ignoring them.
+    reached = min(
+        (_scenic.haversine_m((target[0], target[1]), (c[0], c[1]))
+         for c in r["coords"][::3]), default=1e9)
+    if reached > 1500.0:
+        raise HTTPException(
+            404,
+            f"No loop through {name} fits in {minutes:.0f} minutes without "
+            f"riding the same road both ways. Give it longer.")
+    return {
+        "rider": rider, "minutes": minutes, "kind": "discover",
+        "origin": list(g.node_pos(origin)),
+        "lean_ceiling": p.get("lean_ceiling"),
+        "excluded_segments": sum(1 for seg in g.segments if cost.excluded(seg)),
+        "total_segments": len(g.segments),
+        "routes": [{k: r[k] for k in
+                    ("label", "coords", "kpis", "roads", "stops", "legs",
+                     "visited", "value_thirds", "urban_share")}],
+    }
+
+
+@app.get("/api/ride/replay/{rider}")
+def ride_replay(rider: str):
+    """A ride this rider actually did, read back off the bike.
+
+    Nothing here touches the planner. It is the other half of the loop: the
+    plan says where to go, this says what happened, and every figure in it was
+    measured rather than modelled. Lean angle is the one a phone cannot give
+    you, which is the whole reason a post-ride summary is worth showing.
+    """
+    rider = rider.upper()
+    if rider not in RIDERS:
+        raise HTTPException(404, f"unknown rider {rider}")
+    key = "replay_" + rider
+    if key not in _ride_state:
+        folder = os.path.join(DATASET, RIDERS[rider], "recordedTrips")
+        if not os.path.isdir(folder):
+            raise HTTPException(503, f"rider data not found at {folder}")
+        got = _replay.best_trip(folder)
+        if not got:
+            raise HTTPException(404, "no usable recorded ride for this rider")
+        _ride_state[key] = got
+    return {**_ride_state[key], "rider": rider,
+            "source": "recorded telemetry, not simulated"}
 
 
 @app.get("/api/ride/pois")
