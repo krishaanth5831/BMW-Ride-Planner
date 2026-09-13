@@ -1,0 +1,1 @@
+get rid of the whole fog map feature that is useless, and also the poi from the red areas from before get rid of those. and only give the metrics in when i click the show the ride summary button which should give metrics of the previous ride from the dataset.
