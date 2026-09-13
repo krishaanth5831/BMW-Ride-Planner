@@ -1,0 +1,45 @@
+commit push everything and then pr to main
+
+---
+
+start a dev server
+
+---
+
+what are some unique features we can add to this
+
+---
+
+build the fog map
+
+---
+
+the fog map is a bit buggy when i plan routes, and in the fog map make the roads that you have already ridden green regardless of if its scenic or not and specifically scenic road you have not ridden should be in red and prompt the user asking him if he wants to discover new places today
+
+---
+
+no need to have the whole fog map but add points of interest on all the red areas you identified on the fog map and try to use that when coming up with a ride because then there ends up being better rides
+
+---
+
+after the rider actually does the ride i want a strava type of summary with like a semi opaque screen with ride metrics, like an outline of the path he took during the ride. but how do i do it for the demo because there isnt someone actually riding it its just like a website for now
+
+---
+
+commit and push this to dev then pr it to main
+
+---
+
+which elements of the data structures are repetitive and which can be optimized or removed. for example the objective scenic score seems weird check it out and tell what seems fishy and would improve performance and route suggestions and make it load faster
+
+---
+
+yea do that
+
+---
+
+alright pr this to main
+
+---
+
+there is a branch called alex performance and i want you to take the aspects of loading speed from that and that branch also uses a better and bigger dataset so make a pr with all those features into the main while keep the current features intact. main thing to be fixed is that it should load faster. currently this stuff takes like 30 secs to load the alex performance stuff takes like 5 so just get that aspect onto main
