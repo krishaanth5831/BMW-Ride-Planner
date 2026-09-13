@@ -1,0 +1,5090 @@
+{
+ "bbox": [
+  47.6,
+  11.15,
+  48.25,
+  11.8
+ ],
+ "pois": [
+  {
+   "name": "Pilsensee",
+   "kind": "lake",
+   "lat": 48.0245816,
+   "lon": 11.187130100000001,
+   "weight": 1.8,
+   "ele": null
+  },
+  {
+   "name": "Staffelsee",
+   "kind": "lake",
+   "lat": 47.6943508,
+   "lon": 11.159628999999999,
+   "weight": 1.8,
+   "ele": "649"
+  },
+  {
+   "name": "Tegernsee",
+   "kind": "lake",
+   "lat": 47.72007845,
+   "lon": 11.74509995,
+   "weight": 1.8,
+   "ele": "726"
+  },
+  {
+   "name": "Starnberger See",
+   "kind": "lake",
+   "lat": 47.909306799999996,
+   "lon": 11.3144878,
+   "weight": 1.8,
+   "ele": "584"
+  },
+  {
+   "name": "Ammersee",
+   "kind": "lake",
+   "lat": 48.00627145,
+   "lon": 11.13310115,
+   "weight": 1.8,
+   "ele": "532.9"
+  },
+  {
+   "name": "Walchensee",
+   "kind": "lake",
+   "lat": 47.59334145,
+   "lon": 11.3499318,
+   "weight": 1.8,
+   "ele": "802"
+  },
+  {
+   "name": "Kochelsee",
+   "kind": "lake",
+   "lat": 47.648330349999995,
+   "lon": 11.337718800000001,
+   "weight": 1.8,
+   "ele": "599"
+  },
+  {
+   "name": "W\u00f6rthsee",
+   "kind": "lake",
+   "lat": 48.05875705,
+   "lon": 11.1804588,
+   "weight": 1.8,
+   "ele": null
+  },
+  {
+   "name": "Speichersee (Westbecken)",
+   "kind": "lake",
+   "lat": 48.21671915,
+   "lon": 11.7379245,
+   "weight": 1.8,
+   "ele": null
+  },
+  {
+   "name": "Speichersee",
+   "kind": "lake",
+   "lat": 48.2172462,
+   "lon": 11.7536127,
+   "weight": 1.8,
+   "ele": null
+  },
+  {
+   "name": "Riegsee",
+   "kind": "lake",
+   "lat": 47.70174795,
+   "lon": 11.226339750000001,
+   "weight": 1.73,
+   "ele": null
+  },
+  {
+   "name": "Benediktenwand",
+   "kind": "peak",
+   "lat": 47.6531721,
+   "lon": 11.4655437,
+   "weight": 1.72,
+   "ele": "1800"
+  },
+  {
+   "name": "Heimgarten",
+   "kind": "peak",
+   "lat": 47.6125791,
+   "lon": 11.2806617,
+   "weight": 1.72,
+   "ele": "1791"
+  },
+  {
+   "name": "Herzogstand",
+   "kind": "peak",
+   "lat": 47.6134565,
+   "lon": 11.3084925,
+   "weight": 1.69,
+   "ele": "1731"
+  },
+  {
+   "name": "Wallberg",
+   "kind": "peak",
+   "lat": 47.6658847,
+   "lon": 11.7967506,
+   "weight": 1.69,
+   "ele": "1722"
+  },
+  {
+   "name": "Buchstein",
+   "kind": "peak",
+   "lat": 47.63307,
+   "lon": 11.6793681,
+   "weight": 1.68,
+   "ele": "1701"
+  },
+  {
+   "name": "Setzberg",
+   "kind": "peak",
+   "lat": 47.6512206,
+   "lon": 11.7846084,
+   "weight": 1.68,
+   "ele": "1706"
+  },
+  {
+   "name": "Latschenkopf",
+   "kind": "peak",
+   "lat": 47.6565948,
+   "lon": 11.4990327,
+   "weight": 1.68,
+   "ele": "1712"
+  },
+  {
+   "name": "Ro\u00dfstein",
+   "kind": "peak",
+   "lat": 47.6326069,
+   "lon": 11.676304,
+   "weight": 1.68,
+   "ele": "1698"
+  },
+  {
+   "name": "Achselk\u00f6pfe",
+   "kind": "peak",
+   "lat": 47.6531047,
+   "lon": 11.4862838,
+   "weight": 1.68,
+   "ele": "1710"
+  },
+  {
+   "name": "R\u00f6thenstein",
+   "kind": "peak",
+   "lat": 47.6411926,
+   "lon": 11.7990291,
+   "weight": 1.68,
+   "ele": "1695"
+  },
+  {
+   "name": "Rauhenberg",
+   "kind": "peak",
+   "lat": 47.6425261,
+   "lon": 11.7982856,
+   "weight": 1.68,
+   "ele": "1703"
+  },
+  {
+   "name": "Hirschberg",
+   "kind": "peak",
+   "lat": 47.6607583,
+   "lon": 11.6961076,
+   "weight": 1.67,
+   "ele": "1670"
+  },
+  {
+   "name": "Martinskopf",
+   "kind": "peak",
+   "lat": 47.6089787,
+   "lon": 11.3082424,
+   "weight": 1.67,
+   "ele": "1676"
+  },
+  {
+   "name": "Vorderer Kirchstein",
+   "kind": "peak",
+   "lat": 47.6597349,
+   "lon": 11.501544,
+   "weight": 1.67,
+   "ele": "1670"
+  },
+  {
+   "name": "Grubereck",
+   "kind": "peak",
+   "lat": 47.6387482,
+   "lon": 11.7850676,
+   "weight": 1.67,
+   "ele": "1664"
+  },
+  {
+   "name": "Hinterer Kirchstein",
+   "kind": "peak",
+   "lat": 47.6576681,
+   "lon": 11.4936823,
+   "weight": 1.67,
+   "ele": "1667"
+  },
+  {
+   "name": "Hirschberg",
+   "kind": "peak",
+   "lat": 47.6010996,
+   "lon": 11.2414732,
+   "weight": 1.66,
+   "ele": "1660"
+  },
+  {
+   "name": "Hirschberg Vorgipfel",
+   "kind": "peak",
+   "lat": 47.6595256,
+   "lon": 11.7032747,
+   "weight": 1.66,
+   "ele": "1653"
+  },
+  {
+   "name": "Schlehdorfer Kreuz",
+   "kind": "peak",
+   "lat": 47.6150365,
+   "lon": 11.2995496,
+   "weight": 1.66,
+   "ele": "1640"
+  },
+  {
+   "name": "Stangeneck",
+   "kind": "peak",
+   "lat": 47.6606163,
+   "lon": 11.5086377,
+   "weight": 1.66,
+   "ele": "1646"
+  },
+  {
+   "name": "Hennenkopf",
+   "kind": "peak",
+   "lat": 47.662083,
+   "lon": 11.481904,
+   "weight": 1.65,
+   "ele": "1613"
+  },
+  {
+   "name": "Sch\u00f6nberg",
+   "kind": "peak",
+   "lat": 47.6385238,
+   "lon": 11.6421668,
+   "weight": 1.65,
+   "ele": "1620"
+  },
+  {
+   "name": "Fahrenbergkopf",
+   "kind": "peak",
+   "lat": 47.6067129,
+   "lon": 11.3146329,
+   "weight": 1.65,
+   "ele": "1627"
+  },
+  {
+   "name": "Auerkamp",
+   "kind": "peak",
+   "lat": 47.6611778,
+   "lon": 11.6598621,
+   "weight": 1.64,
+   "ele": "1607"
+  },
+  {
+   "name": "Spitzkamp",
+   "kind": "peak",
+   "lat": 47.658927,
+   "lon": 11.6545785,
+   "weight": 1.64,
+   "ele": "1604"
+  },
+  {
+   "name": "Ochsenkamp",
+   "kind": "peak",
+   "lat": 47.6661218,
+   "lon": 11.6660249,
+   "weight": 1.64,
+   "ele": "1594"
+  },
+  {
+   "name": "Seekarkreuz",
+   "kind": "peak",
+   "lat": 47.6521541,
+   "lon": 11.6431635,
+   "weight": 1.64,
+   "ele": "1601"
+  },
+  {
+   "name": "Rauheck",
+   "kind": "peak",
+   "lat": 47.6135471,
+   "lon": 11.2630079,
+   "weight": 1.64,
+   "ele": "1590"
+  },
+  {
+   "name": "Probstenwand",
+   "kind": "peak",
+   "lat": 47.6619839,
+   "lon": 11.4845246,
+   "weight": 1.64,
+   "ele": "1589"
+  },
+  {
+   "name": "Hochplatte",
+   "kind": "peak",
+   "lat": 47.6403833,
+   "lon": 11.6669669,
+   "weight": 1.64,
+   "ele": "1592"
+  },
+  {
+   "name": "Feichteckwand",
+   "kind": "peak",
+   "lat": 47.6552929,
+   "lon": 11.5023213,
+   "weight": 1.64,
+   "ele": "1600"
+  },
+  {
+   "name": "Brandkopf",
+   "kind": "peak",
+   "lat": 47.6561236,
+   "lon": 11.6528113,
+   "weight": 1.63,
+   "ele": "1569"
+  },
+  {
+   "name": "Fockenstein",
+   "kind": "peak",
+   "lat": 47.6843889,
+   "lon": 11.6522131,
+   "weight": 1.63,
+   "ele": "1564"
+  },
+  {
+   "name": "Jochberg",
+   "kind": "peak",
+   "lat": 47.625939,
+   "lon": 11.3718596,
+   "weight": 1.63,
+   "ele": "1565"
+  },
+  {
+   "name": "Sonnberg",
+   "kind": "peak",
+   "lat": 47.628999,
+   "lon": 11.6748151,
+   "weight": 1.63,
+   "ele": "1576"
+  },
+  {
+   "name": "Brauneck",
+   "kind": "peak",
+   "lat": 47.6641902,
+   "lon": 11.5247915,
+   "weight": 1.62,
+   "ele": "1555"
+  },
+  {
+   "name": "Kratzer",
+   "kind": "peak",
+   "lat": 47.6655995,
+   "lon": 11.7053909,
+   "weight": 1.62,
+   "ele": "1545"
+  },
+  {
+   "name": "Schr\u00f6delstein",
+   "kind": "peak",
+   "lat": 47.6619857,
+   "lon": 11.5198072,
+   "weight": 1.62,
+   "ele": "1548"
+  },
+  {
+   "name": "Rabenkopf",
+   "kind": "peak",
+   "lat": 47.6503674,
+   "lon": 11.4120213,
+   "weight": 1.62,
+   "ele": "1555"
+  },
+  {
+   "name": "\u00d6lrain",
+   "kind": "peak",
+   "lat": 47.6068803,
+   "lon": 11.2423635,
+   "weight": 1.62,
+   "ele": "1542"
+  },
+  {
+   "name": "Daffenstein",
+   "kind": "peak",
+   "lat": 47.6424542,
+   "lon": 11.7806027,
+   "weight": 1.62,
+   "ele": "1546"
+  },
+  {
+   "name": "Silberkopf",
+   "kind": "peak",
+   "lat": 47.6550126,
+   "lon": 11.6995415,
+   "weight": 1.62,
+   "ele": "1540"
+  },
+  {
+   "name": "Hirschh\u00f6rnlkopf",
+   "kind": "peak",
+   "lat": 47.6274844,
+   "lon": 11.4063247,
+   "weight": 1.61,
+   "ele": "1515"
+  },
+  {
+   "name": "Schwarzeck",
+   "kind": "peak",
+   "lat": 47.6521132,
+   "lon": 11.4132331,
+   "weight": 1.61,
+   "ele": "1527"
+  },
+  {
+   "name": "Beigenstein",
+   "kind": "peak",
+   "lat": 47.6508041,
+   "lon": 11.4975146,
+   "weight": 1.61,
+   "ele": "1518"
+  },
+  {
+   "name": "M\u00fchltaleck",
+   "kind": "peak",
+   "lat": 47.6552391,
+   "lon": 11.6613903,
+   "weight": 1.61,
+   "ele": "1518"
+  },
+  {
+   "name": "Rotwandkopf",
+   "kind": "peak",
+   "lat": 47.6037482,
+   "lon": 11.2795512,
+   "weight": 1.61,
+   "ele": "1519"
+  },
+  {
+   "name": "Geierstein",
+   "kind": "peak",
+   "lat": 47.6796515,
+   "lon": 11.6190828,
+   "weight": 1.6,
+   "ele": "1491"
+  },
+  {
+   "name": "Glaswand",
+   "kind": "peak",
+   "lat": 47.6529953,
+   "lon": 11.4362733,
+   "weight": 1.6,
+   "ele": "1496"
+  },
+  {
+   "name": "Rauheck",
+   "kind": "peak",
+   "lat": 47.6611246,
+   "lon": 11.7146008,
+   "weight": 1.6,
+   "ele": "1511"
+  },
+  {
+   "name": "Rauteckkopf",
+   "kind": "peak",
+   "lat": 47.6189466,
+   "lon": 11.2993471,
+   "weight": 1.6,
+   "ele": "1509"
+  },
+  {
+   "name": "Rauchk\u00f6pfl",
+   "kind": "peak",
+   "lat": 47.6184235,
+   "lon": 11.2864843,
+   "weight": 1.6,
+   "ele": "1508"
+  },
+  {
+   "name": "Kirchel",
+   "kind": "peak",
+   "lat": 47.6656433,
+   "lon": 11.5110664,
+   "weight": 1.59,
+   "ele": "1473"
+  },
+  {
+   "name": "Summit",
+   "kind": "peak",
+   "lat": 47.6604114,
+   "lon": 11.7178082,
+   "weight": 1.59,
+   "ele": "1481"
+  },
+  {
+   "name": "Summit",
+   "kind": "peak",
+   "lat": 47.6572994,
+   "lon": 11.4590376,
+   "weight": 1.59,
+   "ele": "1468"
+  },
+  {
+   "name": "Latschenkopf",
+   "kind": "peak",
+   "lat": 47.6310273,
+   "lon": 11.4639849,
+   "weight": 1.59,
+   "ele": "1487"
+  },
+  {
+   "name": "Speichersee (Ostbecken)",
+   "kind": "lake",
+   "lat": 48.2199547,
+   "lon": 11.782010249999999,
+   "weight": 1.59,
+   "ele": null
+  },
+  {
+   "name": "Buchrain",
+   "kind": "peak",
+   "lat": 47.6145286,
+   "lon": 11.2439569,
+   "weight": 1.58,
+   "ele": "1456"
+  },
+  {
+   "name": "Leonhardstein",
+   "kind": "peak",
+   "lat": 47.6370434,
+   "lon": 11.7160997,
+   "weight": 1.58,
+   "ele": "1452"
+  },
+  {
+   "name": "Zwieseleck",
+   "kind": "peak",
+   "lat": 47.6556833,
+   "lon": 11.6700624,
+   "weight": 1.58,
+   "ele": "1461"
+  },
+  {
+   "name": "Filzenkogel",
+   "kind": "peak",
+   "lat": 47.6458133,
+   "lon": 11.7131984,
+   "weight": 1.58,
+   "ele": "1444"
+  },
+  {
+   "name": "Summit",
+   "kind": "peak",
+   "lat": 47.6540014,
+   "lon": 11.4306353,
+   "weight": 1.58,
+   "ele": "1439"
+  },
+  {
+   "name": "Brandk\u00f6pfel",
+   "kind": "peak",
+   "lat": 47.6572892,
+   "lon": 11.4550867,
+   "weight": 1.58,
+   "ele": "1442"
+  },
+  {
+   "name": "Ohlst\u00e4dter Teilberg",
+   "kind": "peak",
+   "lat": 47.6077834,
+   "lon": 11.264842,
+   "weight": 1.58,
+   "ele": "1457"
+  },
+  {
+   "name": "Grie\u00dfkopf",
+   "kind": "peak",
+   "lat": 47.610532,
+   "lon": 11.2577824,
+   "weight": 1.58,
+   "ele": "1452"
+  },
+  {
+   "name": "Summit",
+   "kind": "peak",
+   "lat": 47.6638068,
+   "lon": 11.6718883,
+   "weight": 1.58,
+   "ele": "1442"
+  },
+  {
+   "name": "M\u00fchlriedeck",
+   "kind": "peak",
+   "lat": 47.6418245,
+   "lon": 11.67211,
+   "weight": 1.58,
+   "ele": "1461"
+  },
+  {
+   "name": "Hochalm",
+   "kind": "peak",
+   "lat": 47.6090032,
+   "lon": 11.6041553,
+   "weight": 1.57,
+   "ele": "1427"
+  },
+  {
+   "name": "Grasleitenkopf",
+   "kind": "peak",
+   "lat": 47.6539391,
+   "lon": 11.6297289,
+   "weight": 1.57,
+   "ele": "1433"
+  },
+  {
+   "name": "Gerstenrieder Kopf",
+   "kind": "peak",
+   "lat": 47.6047848,
+   "lon": 11.6005233,
+   "weight": 1.57,
+   "ele": "1421"
+  },
+  {
+   "name": "Riedlerspitz",
+   "kind": "peak",
+   "lat": 47.6367471,
+   "lon": 11.7647514,
+   "weight": 1.57,
+   "ele": "1429"
+  },
+  {
+   "name": "Ahornkopf",
+   "kind": "peak",
+   "lat": 47.6666383,
+   "lon": 11.4839215,
+   "weight": 1.57,
+   "ele": "1422"
+  },
+  {
+   "name": "Bergelskopf",
+   "kind": "peak",
+   "lat": 47.6425473,
+   "lon": 11.4010318,
+   "weight": 1.57,
+   "ele": "1413"
+  },
+  {
+   "name": "Eibelskopf",
+   "kind": "peak",
+   "lat": 47.6617438,
+   "lon": 11.4589857,
+   "weight": 1.57,
+   "ele": "1418"
+  },
+  {
+   "name": "R\u00f6telstein",
+   "kind": "peak",
+   "lat": 47.6310368,
+   "lon": 11.2849208,
+   "weight": 1.56,
+   "ele": "1395"
+  },
+  {
+   "name": "Rosskopf",
+   "kind": "peak",
+   "lat": 47.61385,
+   "lon": 11.610056,
+   "weight": 1.56,
+   "ele": "1403"
+  },
+  {
+   "name": "Friedbergkopf",
+   "kind": "peak",
+   "lat": 47.6289608,
+   "lon": 11.6941638,
+   "weight": 1.56,
+   "ele": "1406"
+  },
+  {
+   "name": "Feuereck",
+   "kind": "peak",
+   "lat": 47.6469772,
+   "lon": 11.4018464,
+   "weight": 1.56,
+   "ele": "1407"
+  },
+  {
+   "name": "Neuh\u00fctteneck",
+   "kind": "peak",
+   "lat": 47.6791834,
+   "lon": 11.6535537,
+   "weight": 1.56,
+   "ele": "1408"
+  },
+  {
+   "name": "Gr\u00fcneck",
+   "kind": "peak",
+   "lat": 47.632505,
+   "lon": 11.7231497,
+   "weight": 1.56,
+   "ele": "1395"
+  },
+  {
+   "name": "Wank",
+   "kind": "peak",
+   "lat": 47.6108194,
+   "lon": 11.243485,
+   "weight": 1.56,
+   "ele": "1403"
+  },
+  {
+   "name": "Labelsberg",
+   "kind": "peak",
+   "lat": 47.6274117,
+   "lon": 11.4529802,
+   "weight": 1.56,
+   "ele": "1406"
+  },
+  {
+   "name": "B\u00e4renhaupt",
+   "kind": "peak",
+   "lat": 47.6262,
+   "lon": 11.41625,
+   "weight": 1.56,
+   "ele": "1404"
+  },
+  {
+   "name": "Regattastrecke Oberschlei\u00dfheim",
+   "kind": "lake",
+   "lat": 48.2428843,
+   "lon": 11.515366499999999,
+   "weight": 1.56,
+   "ele": null
+  },
+  {
+   "name": "Luckenkopf",
+   "kind": "peak",
+   "lat": 47.7146342,
+   "lon": 11.6647047,
+   "weight": 1.55,
+   "ele": "1370"
+  },
+  {
+   "name": "Schwarzeck",
+   "kind": "peak",
+   "lat": 47.6459467,
+   "lon": 11.6681975,
+   "weight": 1.55,
+   "ele": "1382"
+  },
+  {
+   "name": "Schwarzwand",
+   "kind": "peak",
+   "lat": 47.6850641,
+   "lon": 11.626852,
+   "weight": 1.55,
+   "ele": "1364"
+  },
+  {
+   "name": "Saur\u00fcsselkopf",
+   "kind": "peak",
+   "lat": 47.6225673,
+   "lon": 11.6511951,
+   "weight": 1.55,
+   "ele": "1364"
+  },
+  {
+   "name": "Hoher Zwiesler",
+   "kind": "peak",
+   "lat": 47.6007189,
+   "lon": 11.5399668,
+   "weight": 1.55,
+   "ele": "1376"
+  },
+  {
+   "name": "Summit",
+   "kind": "peak",
+   "lat": 47.6476985,
+   "lon": 11.4787573,
+   "weight": 1.55,
+   "ele": "1376"
+  },
+  {
+   "name": "Gemskopf",
+   "kind": "peak",
+   "lat": 47.6573099,
+   "lon": 11.4304621,
+   "weight": 1.55,
+   "ele": "1372"
+  },
+  {
+   "name": "Bettsteineck",
+   "kind": "peak",
+   "lat": 47.6685722,
+   "lon": 11.6941222,
+   "weight": 1.55,
+   "ele": "1370"
+  },
+  {
+   "name": "Alpenkopf",
+   "kind": "peak",
+   "lat": 47.6252731,
+   "lon": 11.2815984,
+   "weight": 1.55,
+   "ele": "1384"
+  },
+  {
+   "name": "Huder",
+   "kind": "peak",
+   "lat": 47.7012898,
+   "lon": 11.6755881,
+   "weight": 1.55,
+   "ele": "1382"
+  },
+  {
+   "name": "Osterfeuerspitze",
+   "kind": "peak",
+   "lat": 47.6031223,
+   "lon": 11.2150194,
+   "weight": 1.55,
+   "ele": "1368"
+  },
+  {
+   "name": "Kotiger Stein",
+   "kind": "peak",
+   "lat": 47.658537,
+   "lon": 11.5346158,
+   "weight": 1.55,
+   "ele": "1363"
+  },
+  {
+   "name": "Sattelkopf",
+   "kind": "peak",
+   "lat": 47.6938922,
+   "lon": 11.6721641,
+   "weight": 1.55,
+   "ele": "1384"
+  },
+  {
+   "name": "Zwiesel",
+   "kind": "peak",
+   "lat": 47.7235737,
+   "lon": 11.4884518,
+   "weight": 1.54,
+   "ele": "1348"
+  },
+  {
+   "name": "Zwieselberg",
+   "kind": "peak",
+   "lat": 47.6100053,
+   "lon": 11.7721582,
+   "weight": 1.54,
+   "ele": "1341"
+  },
+  {
+   "name": "Weissenbachkopf",
+   "kind": "peak",
+   "lat": 47.6077942,
+   "lon": 11.773529,
+   "weight": 1.54,
+   "ele": "1352"
+  },
+  {
+   "name": "Kotlahnerkopf",
+   "kind": "peak",
+   "lat": 47.6750132,
+   "lon": 11.7197258,
+   "weight": 1.54,
+   "ele": "1344"
+  },
+  {
+   "name": "Breitenkopf",
+   "kind": "peak",
+   "lat": 47.6180237,
+   "lon": 11.6332571,
+   "weight": 1.54,
+   "ele": "1347"
+  },
+  {
+   "name": "Gei\u00dfkopf",
+   "kind": "peak",
+   "lat": 47.6013397,
+   "lon": 11.5956652,
+   "weight": 1.54,
+   "ele": "1352"
+  },
+  {
+   "name": "Kogel",
+   "kind": "peak",
+   "lat": 47.66997,
+   "lon": 11.5308184,
+   "weight": 1.54,
+   "ele": "1340"
+  },
+  {
+   "name": "Katzenkopf",
+   "kind": "peak",
+   "lat": 47.6544438,
+   "lon": 11.5180908,
+   "weight": 1.54,
+   "ele": "1350"
+  },
+  {
+   "name": "Summit",
+   "kind": "peak",
+   "lat": 47.6418784,
+   "lon": 11.463017,
+   "weight": 1.54,
+   "ele": "1338"
+  },
+  {
+   "name": "Summit",
+   "kind": "peak",
+   "lat": 47.6386841,
+   "lon": 11.4629778,
+   "weight": 1.54,
+   "ele": "1338"
+  },
+  {
+   "name": "Halseck",
+   "kind": "peak",
+   "lat": 47.6493353,
+   "lon": 11.7155159,
+   "weight": 1.54,
+   "ele": "1354"
+  },
+  {
+   "name": "Koteck",
+   "kind": "peak",
+   "lat": 47.6669824,
+   "lon": 11.5381086,
+   "weight": 1.54,
+   "ele": "1350"
+  },
+  {
+   "name": "Spitzeck",
+   "kind": "peak",
+   "lat": 47.7018864,
+   "lon": 11.6661234,
+   "weight": 1.54,
+   "ele": "1339"
+  },
+  {
+   "name": "Rechelkopf",
+   "kind": "peak",
+   "lat": 47.7222953,
+   "lon": 11.6247509,
+   "weight": 1.53,
+   "ele": "1330"
+  },
+  {
+   "name": "Rohrkopf",
+   "kind": "peak",
+   "lat": 47.7009765,
+   "lon": 11.7977397,
+   "weight": 1.53,
+   "ele": "1316"
+  },
+  {
+   "name": "Stallauer Kopf",
+   "kind": "peak",
+   "lat": 47.7246598,
+   "lon": 11.4816115,
+   "weight": 1.53,
+   "ele": "1322"
+  },
+  {
+   "name": "Kogelkopf",
+   "kind": "peak",
+   "lat": 47.7190337,
+   "lon": 11.6744,
+   "weight": 1.53,
+   "ele": "1324"
+  },
+  {
+   "name": "Summit",
+   "kind": "peak",
+   "lat": 47.678025,
+   "lon": 11.7282164,
+   "weight": 1.53,
+   "ele": "1321"
+  },
+  {
+   "name": "Brunstlahnerkopf",
+   "kind": "peak",
+   "lat": 47.6010855,
+   "lon": 11.6109935,
+   "weight": 1.53,
+   "ele": "1321"
+  },
+  {
+   "name": "Osterfeuerk\u00f6pfl",
+   "kind": "peak",
+   "lat": 47.6023232,
+   "lon": 11.2145558,
+   "weight": 1.53,
+   "ele": "1336"
+  },
+  {
+   "name": "Gro\u00dfer Illing",
+   "kind": "peak",
+   "lat": 47.624011,
+   "lon": 11.2637843,
+   "weight": 1.53,
+   "ele": "1313"
+  },
+  {
+   "name": "L\u00e4ngentalkopf",
+   "kind": "peak",
+   "lat": 47.6677739,
+   "lon": 11.512035,
+   "weight": 1.53,
+   "ele": "1326"
+  },
+  {
+   "name": "Hahnberg",
+   "kind": "peak",
+   "lat": 47.6334615,
+   "lon": 11.4907304,
+   "weight": 1.53,
+   "ele": "1321"
+  },
+  {
+   "name": "Schlagkopf",
+   "kind": "peak",
+   "lat": 47.6765339,
+   "lon": 11.6358042,
+   "weight": 1.53,
+   "ele": "1330"
+  },
+  {
+   "name": "Wenigberg",
+   "kind": "peak",
+   "lat": 47.6085491,
+   "lon": 11.7632273,
+   "weight": 1.53,
+   "ele": "1326"
+  },
+  {
+   "name": "Gindelalmschneid",
+   "kind": "peak",
+   "lat": 47.7236176,
+   "lon": 11.7956894,
+   "weight": 1.53,
+   "ele": "1335"
+  },
+  {
+   "name": "Ringspitz",
+   "kind": "peak",
+   "lat": 47.6829037,
+   "lon": 11.7330155,
+   "weight": 1.52,
+   "ele": "1293"
+  },
+  {
+   "name": "Silbereck",
+   "kind": "peak",
+   "lat": 47.6507526,
+   "lon": 11.6924223,
+   "weight": 1.52,
+   "ele": "1305"
+  },
+  {
+   "name": "Waxenstein",
+   "kind": "peak",
+   "lat": 47.6658503,
+   "lon": 11.5427384,
+   "weight": 1.52,
+   "ele": "1310"
+  },
+  {
+   "name": "Schwarzbergel",
+   "kind": "peak",
+   "lat": 47.6884103,
+   "lon": 11.6244144,
+   "weight": 1.52,
+   "ele": "1307"
+  },
+  {
+   "name": "Lusenk\u00f6pfel",
+   "kind": "peak",
+   "lat": 47.6586111,
+   "lon": 11.4145225,
+   "weight": 1.52,
+   "ele": "1299"
+  },
+  {
+   "name": "Desselkopf",
+   "kind": "peak",
+   "lat": 47.6183935,
+   "lon": 11.3579688,
+   "weight": 1.52,
+   "ele": "1290"
+  },
+  {
+   "name": "Summit",
+   "kind": "peak",
+   "lat": 47.6806979,
+   "lon": 11.7342227,
+   "weight": 1.52,
+   "ele": "1293"
+  },
+  {
+   "name": "Brauneck",
+   "kind": "peak",
+   "lat": 47.7100497,
+   "lon": 11.6638254,
+   "weight": 1.52,
+   "ele": "1290"
+  },
+  {
+   "name": "Sulzkopf",
+   "kind": "peak",
+   "lat": 47.7295347,
+   "lon": 11.620906,
+   "weight": 1.51,
+   "ele": "1279"
+  },
+  {
+   "name": "Grasleitenstein",
+   "kind": "peak",
+   "lat": 47.6552244,
+   "lon": 11.6185482,
+   "weight": 1.51,
+   "ele": "1268"
+  },
+  {
+   "name": "Gronetseck",
+   "kind": "peak",
+   "lat": 47.7155768,
+   "lon": 11.6496965,
+   "weight": 1.51,
+   "ele": "1278"
+  },
+  {
+   "name": "Luchseck",
+   "kind": "peak",
+   "lat": 47.6750969,
+   "lon": 11.7083359,
+   "weight": 1.51,
+   "ele": "1278"
+  },
+  {
+   "name": "Bettstein",
+   "kind": "peak",
+   "lat": 47.6684777,
+   "lon": 11.6886388,
+   "weight": 1.51,
+   "ele": "1272"
+  },
+  {
+   "name": "Sonnenspitz",
+   "kind": "peak",
+   "lat": 47.6393841,
+   "lon": 11.3760576,
+   "weight": 1.51,
+   "ele": "1269"
+  },
+  {
+   "name": "Mitterberg",
+   "kind": "peak",
+   "lat": 47.7214992,
+   "lon": 11.6369916,
+   "weight": 1.51,
+   "ele": "1280"
+  },
+  {
+   "name": "Schweinberg",
+   "kind": "peak",
+   "lat": 47.6966791,
+   "lon": 11.6217197,
+   "weight": 1.51,
+   "ele": "1278"
+  },
+  {
+   "name": "Talkopf",
+   "kind": "peak",
+   "lat": 47.61813,
+   "lon": 11.5623576,
+   "weight": 1.51,
+   "ele": "1273"
+  },
+  {
+   "name": "Mitterkopf",
+   "kind": "peak",
+   "lat": 47.611569,
+   "lon": 11.5557259,
+   "weight": 1.51,
+   "ele": "1275"
+  },
+  {
+   "name": "Rasserringkopf",
+   "kind": "peak",
+   "lat": 47.6059621,
+   "lon": 11.7373153,
+   "weight": 1.51,
+   "ele": "1281"
+  },
+  {
+   "name": "Summit",
+   "kind": "peak",
+   "lat": 47.6199259,
+   "lon": 11.7988676,
+   "weight": 1.51,
+   "ele": "1287"
+  },
+  {
+   "name": "Kaltwasserwand",
+   "kind": "peak",
+   "lat": 47.6361759,
+   "lon": 11.3942002,
+   "weight": 1.51,
+   "ele": "1263"
+  },
+  {
+   "name": "Bauernwurf",
+   "kind": "peak",
+   "lat": 47.6563397,
+   "lon": 11.4393984,
+   "weight": 1.51,
+   "ele": "1287"
+  },
+  {
+   "name": "Summit",
+   "kind": "peak",
+   "lat": 47.6433112,
+   "lon": 11.4353557,
+   "weight": 1.51,
+   "ele": "1285"
+  },
+  {
+   "name": "Angerlkopf",
+   "kind": "peak",
+   "lat": 47.7224724,
+   "lon": 11.4674014,
+   "weight": 1.5,
+   "ele": "1249"
+  },
+  {
+   "name": "Blomberg Westgipfel",
+   "kind": "peak",
+   "lat": 47.7333461,
+   "lon": 11.4921002,
+   "weight": 1.5,
+   "ele": "1248"
+  },
+  {
+   "name": "Klammberg",
+   "kind": "peak",
+   "lat": 47.6097832,
+   "lon": 11.7067279,
+   "weight": 1.5,
+   "ele": "1247"
+  },
+  {
+   "name": "Kesselkopf",
+   "kind": "peak",
+   "lat": 47.6805905,
+   "lon": 11.5005893,
+   "weight": 1.5,
+   "ele": "1248"
+  },
+  {
+   "name": "Kogelberg",
+   "kind": "peak",
+   "lat": 47.67546,
+   "lon": 11.534111,
+   "weight": 1.5,
+   "ele": "1241"
+  },
+  {
+   "name": "Moosenbergkopf",
+   "kind": "peak",
+   "lat": 47.6791118,
+   "lon": 11.4877094,
+   "weight": 1.5,
+   "ele": "1244"
+  },
+  {
+   "name": "Summit",
+   "kind": "peak",
+   "lat": 47.6032883,
+   "lon": 11.6793715,
+   "weight": 1.5,
+   "ele": "1242"
+  },
+  {
+   "name": "Graseck",
+   "kind": "peak",
+   "lat": 47.6363026,
+   "lon": 11.3733414,
+   "weight": 1.5,
+   "ele": "1240"
+  },
+  {
+   "name": "Nesselscheibe",
+   "kind": "peak",
+   "lat": 47.7284036,
+   "lon": 11.680452,
+   "weight": 1.5,
+   "ele": "1258"
+  },
+  {
+   "name": "Neureuth",
+   "kind": "peak",
+   "lat": 47.7284592,
+   "lon": 11.7720937,
+   "weight": 1.5,
+   "ele": "1261"
+  },
+  {
+   "name": "L\u00e4ngenberg",
+   "kind": "peak",
+   "lat": 47.6752664,
+   "lon": 11.4914896,
+   "weight": 1.5,
+   "ele": "1244"
+  },
+  {
+   "name": "Gro\u00dfer Ostersee",
+   "kind": "lake",
+   "lat": 47.787435599999995,
+   "lon": 11.3027654,
+   "weight": 1.5,
+   "ele": "588"
+  },
+  {
+   "name": "Stallauer Eck",
+   "kind": "peak",
+   "lat": 47.7337525,
+   "lon": 11.4786369,
+   "weight": 1.49,
+   "ele": "1213"
+  },
+  {
+   "name": "Heigelkopf",
+   "kind": "peak",
+   "lat": 47.727705,
+   "lon": 11.5133539,
+   "weight": 1.49,
+   "ele": "1218"
+  },
+  {
+   "name": "Summit",
+   "kind": "peak",
+   "lat": 47.6918152,
+   "lon": 11.6474941,
+   "weight": 1.49,
+   "ele": "1234"
+  },
+  {
+   "name": "Buchenauer Kopf",
+   "kind": "peak",
+   "lat": 47.693248,
+   "lon": 11.4667189,
+   "weight": 1.49,
+   "ele": "1225"
+  },
+  {
+   "name": "Rauchenberg",
+   "kind": "peak",
+   "lat": 47.6213772,
+   "lon": 11.5683741,
+   "weight": 1.49,
+   "ele": "1221"
+  },
+  {
+   "name": "Anderlkopf",
+   "kind": "peak",
+   "lat": 47.6109599,
+   "lon": 11.5634289,
+   "weight": 1.49,
+   "ele": "1231"
+  },
+  {
+   "name": "Blomberg Ostgipfel",
+   "kind": "peak",
+   "lat": 47.7335365,
+   "lon": 11.5072874,
+   "weight": 1.49,
+   "ele": "1237"
+  },
+  {
+   "name": "Hoher Gernberg",
+   "kind": "peak",
+   "lat": 47.6145044,
+   "lon": 11.7269033,
+   "weight": 1.49,
+   "ele": "1226"
+  },
+  {
+   "name": "Summit",
+   "kind": "peak",
+   "lat": 47.6287036,
+   "lon": 11.7344167,
+   "weight": 1.49,
+   "ele": "1224"
+  },
+  {
+   "name": "Gro\u00dfer Wildbrenner",
+   "kind": "peak",
+   "lat": 47.6188093,
+   "lon": 11.7654529,
+   "weight": 1.49,
+   "ele": "1234"
+  },
+  {
+   "name": "Hohlenstein",
+   "kind": "peak",
+   "lat": 47.6209764,
+   "lon": 11.7649963,
+   "weight": 1.49,
+   "ele": "1230"
+  },
+  {
+   "name": "Ro\u00dfsteinwand",
+   "kind": "peak",
+   "lat": 47.6555628,
+   "lon": 11.7665988,
+   "weight": 1.49,
+   "ele": "1217"
+  },
+  {
+   "name": "Schwarzenbergkopf",
+   "kind": "peak",
+   "lat": 47.6656663,
+   "lon": 11.4292045,
+   "weight": 1.49,
+   "ele": "1233"
+  },
+  {
+   "name": "Osterfeuerberg",
+   "kind": "peak",
+   "lat": 47.6006323,
+   "lon": 11.2107518,
+   "weight": 1.49,
+   "ele": "1215"
+  },
+  {
+   "name": "Riederstein",
+   "kind": "peak",
+   "lat": 47.704189,
+   "lon": 11.7923115,
+   "weight": 1.48,
+   "ele": "1207"
+  },
+  {
+   "name": "Enzenauer Kopf",
+   "kind": "peak",
+   "lat": 47.7273048,
+   "lon": 11.4602762,
+   "weight": 1.48,
+   "ele": "1205"
+  },
+  {
+   "name": "Windberg",
+   "kind": "peak",
+   "lat": 47.674368,
+   "lon": 11.6940066,
+   "weight": 1.48,
+   "ele": "1188"
+  },
+  {
+   "name": "Sattelkopf",
+   "kind": "peak",
+   "lat": 47.6841375,
+   "lon": 11.4798829,
+   "weight": 1.48,
+   "ele": "1202"
+  },
+  {
+   "name": "Summit",
+   "kind": "peak",
+   "lat": 47.6939328,
+   "lon": 11.4561753,
+   "weight": 1.48,
+   "ele": "1207"
+  },
+  {
+   "name": "Gurneck",
+   "kind": "peak",
+   "lat": 47.6706383,
+   "lon": 11.4690619,
+   "weight": 1.48,
+   "ele": "1198"
+  },
+  {
+   "name": "Vogelkopf",
+   "kind": "peak",
+   "lat": 47.6873696,
+   "lon": 11.4814285,
+   "weight": 1.48,
+   "ele": "1210"
+  },
+  {
+   "name": "Summit",
+   "kind": "peak",
+   "lat": 47.6162849,
+   "lon": 11.6244428,
+   "weight": 1.48,
+   "ele": "1212"
+  },
+  {
+   "name": "Summit",
+   "kind": "peak",
+   "lat": 47.6361347,
+   "lon": 11.503856,
+   "weight": 1.48,
+   "ele": "1194"
+  },
+  {
+   "name": "Paradiesk\u00f6pfel",
+   "kind": "peak",
+   "lat": 47.6063116,
+   "lon": 11.5554406,
+   "weight": 1.48,
+   "ele": "1204"
+  },
+  {
+   "name": "Fahrtkopf",
+   "kind": "peak",
+   "lat": 47.71849,
+   "lon": 11.4645391,
+   "weight": 1.48,
+   "ele": "1203"
+  },
+  {
+   "name": "Summit",
+   "kind": "peak",
+   "lat": 47.7312885,
+   "lon": 11.6682092,
+   "weight": 1.48,
+   "ele": "1212"
+  },
+  {
+   "name": "Wasenkogel",
+   "kind": "peak",
+   "lat": 47.7288407,
+   "lon": 11.6905672,
+   "weight": 1.48,
+   "ele": "1211"
+  },
+  {
+   "name": "Summit",
+   "kind": "peak",
+   "lat": 47.6122279,
+   "lon": 11.7050012,
+   "weight": 1.48,
+   "ele": "1204"
+  },
+  {
+   "name": "Summit",
+   "kind": "peak",
+   "lat": 47.6315661,
+   "lon": 11.7124921,
+   "weight": 1.48,
+   "ele": "1210"
+  },
+  {
+   "name": "Kleiner Wildbrenner",
+   "kind": "peak",
+   "lat": 47.6178475,
+   "lon": 11.7698095,
+   "weight": 1.48,
+   "ele": "1191"
+  },
+  {
+   "name": "Reitk\u00f6pfl",
+   "kind": "peak",
+   "lat": 47.6726706,
+   "lon": 11.7280922,
+   "weight": 1.47,
+   "ele": "1166"
+  },
+  {
+   "name": "Hochtannenkopf",
+   "kind": "peak",
+   "lat": 47.7008493,
+   "lon": 11.4956366,
+   "weight": 1.47,
+   "ele": "1184"
+  },
+  {
+   "name": "Rechelk\u00f6pfel",
+   "kind": "peak",
+   "lat": 47.720185,
+   "lon": 11.6167245,
+   "weight": 1.47,
+   "ele": "1182"
+  },
+  {
+   "name": "Summit",
+   "kind": "peak",
+   "lat": 47.6037283,
+   "lon": 11.5475747,
+   "weight": 1.47,
+   "ele": "1176"
+  },
+  {
+   "name": "Fischberg",
+   "kind": "peak",
+   "lat": 47.6000678,
+   "lon": 11.3914884,
+   "weight": 1.47,
+   "ele": "1164"
+  },
+  {
+   "name": "Gassler Berg",
+   "kind": "peak",
+   "lat": 47.7338721,
+   "lon": 11.7683304,
+   "weight": 1.47,
+   "ele": "1178"
+  },
+  {
+   "name": "Gernbergkopf",
+   "kind": "peak",
+   "lat": 47.6155374,
+   "lon": 11.7339243,
+   "weight": 1.47,
+   "ele": "1177"
+  },
+  {
+   "name": "Summit",
+   "kind": "peak",
+   "lat": 47.62027,
+   "lon": 11.753003,
+   "weight": 1.47,
+   "ele": "1174"
+  },
+  {
+   "name": "Setzbergeck",
+   "kind": "peak",
+   "lat": 47.6505209,
+   "lon": 11.7658835,
+   "weight": 1.47,
+   "ele": "1179"
+  },
+  {
+   "name": "Summit",
+   "kind": "peak",
+   "lat": 47.7248726,
+   "lon": 11.7631883,
+   "weight": 1.47,
+   "ele": "1179"
+  },
+  {
+   "name": "Summit",
+   "kind": "peak",
+   "lat": 47.6991768,
+   "lon": 11.6978276,
+   "weight": 1.46,
+   "ele": "1153"
+  },
+  {
+   "name": "Bodigberg",
+   "kind": "peak",
+   "lat": 47.6056914,
+   "lon": 11.6568589,
+   "weight": 1.46,
+   "ele": "1140"
+  },
+  {
+   "name": "Klausenkopf",
+   "kind": "peak",
+   "lat": 47.6856783,
+   "lon": 11.5025335,
+   "weight": 1.46,
+   "ele": "1151"
+  },
+  {
+   "name": "Demelspitze",
+   "kind": "peak",
+   "lat": 47.6690451,
+   "lon": 11.5445739,
+   "weight": 1.46,
+   "ele": "1158"
+  },
+  {
+   "name": "Waxenstein",
+   "kind": "peak",
+   "lat": 47.6845031,
+   "lon": 11.4896257,
+   "weight": 1.46,
+   "ele": "1162"
+  },
+  {
+   "name": "Schwarzk\u00f6pfel",
+   "kind": "peak",
+   "lat": 47.7273579,
+   "lon": 11.6080162,
+   "weight": 1.46,
+   "ele": "1140"
+  },
+  {
+   "name": "Brandkopf",
+   "kind": "peak",
+   "lat": 47.6126434,
+   "lon": 11.5232574,
+   "weight": 1.46,
+   "ele": "1152"
+  },
+  {
+   "name": "Windpasselkopf",
+   "kind": "peak",
+   "lat": 47.6969366,
+   "lon": 11.4474834,
+   "weight": 1.46,
+   "ele": "1146"
+  },
+  {
+   "name": "B\u00e4renwand",
+   "kind": "peak",
+   "lat": 47.6754639,
+   "lon": 11.7941959,
+   "weight": 1.46,
+   "ele": "1156"
+  },
+  {
+   "name": "Psengberg",
+   "kind": "peak",
+   "lat": 47.6114705,
+   "lon": 11.4019694,
+   "weight": 1.46,
+   "ele": "1155"
+  },
+  {
+   "name": "Keilkopf",
+   "kind": "peak",
+   "lat": 47.6953903,
+   "lon": 11.6023771,
+   "weight": 1.45,
+   "ele": "1125"
+  },
+  {
+   "name": "Zwergelberg",
+   "kind": "peak",
+   "lat": 47.6988794,
+   "lon": 11.7045932,
+   "weight": 1.45,
+   "ele": "1113"
+  },
+  {
+   "name": "Blaikenberg",
+   "kind": "peak",
+   "lat": 47.6577022,
+   "lon": 11.5436918,
+   "weight": 1.45,
+   "ele": "1133"
+  },
+  {
+   "name": "Summit",
+   "kind": "peak",
+   "lat": 47.688516,
+   "lon": 11.6093615,
+   "weight": 1.45,
+   "ele": "1132"
+  },
+  {
+   "name": "Summit",
+   "kind": "peak",
+   "lat": 47.6015407,
+   "lon": 11.6441194,
+   "weight": 1.45,
+   "ele": "1128"
+  },
+  {
+   "name": "D\u00fcftberg",
+   "kind": "peak",
+   "lat": 47.6375775,
+   "lon": 11.5188518,
+   "weight": 1.45,
+   "ele": "1126"
+  },
+  {
+   "name": "Summit",
+   "kind": "peak",
+   "lat": 47.6128437,
+   "lon": 11.5296766,
+   "weight": 1.45,
+   "ele": "1124"
+  },
+  {
+   "name": "Oeder Kogel",
+   "kind": "peak",
+   "lat": 47.7344509,
+   "lon": 11.7765773,
+   "weight": 1.45,
+   "ele": "1135"
+  },
+  {
+   "name": "Schu\u00dfkogel",
+   "kind": "peak",
+   "lat": 47.7348091,
+   "lon": 11.7863439,
+   "weight": 1.45,
+   "ele": "1134"
+  },
+  {
+   "name": "Summit",
+   "kind": "peak",
+   "lat": 47.6162612,
+   "lon": 11.773181,
+   "weight": 1.45,
+   "ele": "1123"
+  },
+  {
+   "name": "Auereck",
+   "kind": "peak",
+   "lat": 47.7112511,
+   "lon": 11.695073,
+   "weight": 1.45,
+   "ele": "1113"
+  },
+  {
+   "name": "Wespenkopf",
+   "kind": "peak",
+   "lat": 47.6333643,
+   "lon": 11.430298,
+   "weight": 1.45,
+   "ele": "1127"
+  },
+  {
+   "name": "Brunnenberg",
+   "kind": "peak",
+   "lat": 47.6081028,
+   "lon": 11.4626765,
+   "weight": 1.44,
+   "ele": "1102"
+  },
+  {
+   "name": "Sch\u00fcrfenkopf",
+   "kind": "peak",
+   "lat": 47.7223741,
+   "lon": 11.6007828,
+   "weight": 1.44,
+   "ele": "1096"
+  },
+  {
+   "name": "Kienstein",
+   "kind": "peak",
+   "lat": 47.6224664,
+   "lon": 11.4481812,
+   "weight": 1.44,
+   "ele": "1101"
+  },
+  {
+   "name": "Brunnstein",
+   "kind": "peak",
+   "lat": 47.6665999,
+   "lon": 11.5484419,
+   "weight": 1.44,
+   "ele": "1099"
+  },
+  {
+   "name": "Hochenkopf",
+   "kind": "peak",
+   "lat": 47.61353,
+   "lon": 11.4786087,
+   "weight": 1.44,
+   "ele": "1100"
+  },
+  {
+   "name": "Kleintegernseer Berg",
+   "kind": "peak",
+   "lat": 47.707434,
+   "lon": 11.7782249,
+   "weight": 1.44,
+   "ele": "1106"
+  },
+  {
+   "name": "Semmelberg",
+   "kind": "peak",
+   "lat": 47.7105567,
+   "lon": 11.7034539,
+   "weight": 1.44,
+   "ele": "1101"
+  },
+  {
+   "name": "G\u00f6rglk\u00f6pfl",
+   "kind": "peak",
+   "lat": 47.6932798,
+   "lon": 11.482152,
+   "weight": 1.43,
+   "ele": "1068"
+  },
+  {
+   "name": "Gef\u00e4llberg",
+   "kind": "peak",
+   "lat": 47.7313486,
+   "lon": 11.657078,
+   "weight": 1.43,
+   "ele": "1070"
+  },
+  {
+   "name": "Summit",
+   "kind": "peak",
+   "lat": 47.6023446,
+   "lon": 11.5316975,
+   "weight": 1.43,
+   "ele": "1082"
+  },
+  {
+   "name": "Summit",
+   "kind": "peak",
+   "lat": 47.615704,
+   "lon": 11.5700859,
+   "weight": 1.43,
+   "ele": "1081"
+  },
+  {
+   "name": "Rieder Vorberg",
+   "kind": "peak",
+   "lat": 47.6760936,
+   "lon": 11.4221573,
+   "weight": 1.43,
+   "ele": "1068"
+  },
+  {
+   "name": "Pfliegeleck",
+   "kind": "peak",
+   "lat": 47.7070306,
+   "lon": 11.7706673,
+   "weight": 1.43,
+   "ele": "1065"
+  },
+  {
+   "name": "Eselauberg",
+   "kind": "peak",
+   "lat": 47.6516132,
+   "lon": 11.5430831,
+   "weight": 1.42,
+   "ele": "1041"
+  },
+  {
+   "name": "Kohlberg",
+   "kind": "peak",
+   "lat": 47.6386176,
+   "lon": 11.5444112,
+   "weight": 1.42,
+   "ele": "1041"
+  },
+  {
+   "name": "Kohlberg",
+   "kind": "peak",
+   "lat": 47.6386977,
+   "lon": 11.5533863,
+   "weight": 1.42,
+   "ele": "1046"
+  },
+  {
+   "name": "Dachsenberg",
+   "kind": "peak",
+   "lat": 47.6723962,
+   "lon": 11.4261658,
+   "weight": 1.42,
+   "ele": "1061"
+  },
+  {
+   "name": "Simmersberg",
+   "kind": "peak",
+   "lat": 47.6363117,
+   "lon": 11.2664221,
+   "weight": 1.42,
+   "ele": "1052"
+  },
+  {
+   "name": "Kleiner Illing",
+   "kind": "peak",
+   "lat": 47.6250919,
+   "lon": 11.2536348,
+   "weight": 1.42,
+   "ele": "1062"
+  },
+  {
+   "name": "Axelstein",
+   "kind": "peak",
+   "lat": 47.6221276,
+   "lon": 11.4426596,
+   "weight": 1.42,
+   "ele": "1051"
+  },
+  {
+   "name": "Brandenberg",
+   "kind": "peak",
+   "lat": 47.6756758,
+   "lon": 11.4573057,
+   "weight": 1.41,
+   "ele": "1031"
+  },
+  {
+   "name": "Hubertus",
+   "kind": "peak",
+   "lat": 47.6140934,
+   "lon": 11.6595201,
+   "weight": 1.41,
+   "ele": "1015"
+  },
+  {
+   "name": "Zwieselschrofen",
+   "kind": "peak",
+   "lat": 47.6558809,
+   "lon": 11.3959589,
+   "weight": 1.41,
+   "ele": "1027"
+  },
+  {
+   "name": "Wagbichl",
+   "kind": "peak",
+   "lat": 47.6317601,
+   "lon": 11.2636489,
+   "weight": 1.41,
+   "ele": "1017"
+  },
+  {
+   "name": "Summit",
+   "kind": "peak",
+   "lat": 47.6045742,
+   "lon": 11.393472,
+   "weight": 1.41,
+   "ele": "1017"
+  },
+  {
+   "name": "Achenpass",
+   "kind": "pass",
+   "lat": 47.6045893,
+   "lon": 11.6359109,
+   "weight": 1.4,
+   "ele": "941"
+  },
+  {
+   "name": "Hirschtalsattel",
+   "kind": "pass",
+   "lat": 47.6716794,
+   "lon": 11.6610511,
+   "weight": 1.4,
+   "ele": "1227"
+  },
+  {
+   "name": "Glaswandscharte",
+   "kind": "pass",
+   "lat": 47.6532065,
+   "lon": 11.4470147,
+   "weight": 1.4,
+   "ele": "1324"
+  },
+  {
+   "name": "Probstalmsattel",
+   "kind": "pass",
+   "lat": 47.6554914,
+   "lon": 11.4948924,
+   "weight": 1.4,
+   "ele": "1628"
+  },
+  {
+   "name": "Langenecksattel",
+   "kind": "pass",
+   "lat": 47.6307182,
+   "lon": 11.4832811,
+   "weight": 1.4,
+   "ele": "1167"
+  },
+  {
+   "name": "Mountain pass",
+   "kind": "pass",
+   "lat": 47.6553423,
+   "lon": 11.6475851,
+   "weight": 1.4,
+   "ele": "1497"
+  },
+  {
+   "name": "Pessenbacher Schneid",
+   "kind": "pass",
+   "lat": 47.6520233,
+   "lon": 11.4209414,
+   "weight": 1.4,
+   "ele": "1270"
+  },
+  {
+   "name": "Mariaeck",
+   "kind": "pass",
+   "lat": 47.6433033,
+   "lon": 11.6449773,
+   "weight": 1.4,
+   "ele": "1469"
+  },
+  {
+   "name": "Mountain pass",
+   "kind": "pass",
+   "lat": 47.623111,
+   "lon": 11.6436605,
+   "weight": 1.4,
+   "ele": null
+  },
+  {
+   "name": "Kesselberg",
+   "kind": "pass",
+   "lat": 47.6215727,
+   "lon": 11.3492014,
+   "weight": 1.4,
+   "ele": "858"
+  },
+  {
+   "name": "Beigarten",
+   "kind": "pass",
+   "lat": 47.9760651,
+   "lon": 11.4925748,
+   "weight": 1.4,
+   "ele": "675"
+  },
+  {
+   "name": "Rot\u00f6hrsattel",
+   "kind": "pass",
+   "lat": 47.6540337,
+   "lon": 11.4776478,
+   "weight": 1.4,
+   "ele": null
+  },
+  {
+   "name": "Summit",
+   "kind": "peak",
+   "lat": 47.6106509,
+   "lon": 11.4722222,
+   "weight": 1.4,
+   "ele": "1005"
+  },
+  {
+   "name": "Passh\u00f6he Graf Aygo",
+   "kind": "pass",
+   "lat": 47.9651538,
+   "lon": 11.7889086,
+   "weight": 1.4,
+   "ele": "647.45"
+  },
+  {
+   "name": "Kirchsee",
+   "kind": "lake",
+   "lat": 47.818153,
+   "lon": 11.619553,
+   "weight": 1.19,
+   "ele": null
+  },
+  {
+   "name": "Isar-Stausee T\u00f6lz",
+   "kind": "lake",
+   "lat": 47.77072025,
+   "lon": 11.5417271,
+   "weight": 1.17,
+   "ele": null
+  },
+  {
+   "name": "Feringasee",
+   "kind": "lake",
+   "lat": 48.19458145,
+   "lon": 11.67098165,
+   "weight": 1.11,
+   "ele": null
+  },
+  {
+   "name": "Maisinger See",
+   "kind": "lake",
+   "lat": 47.97985035000001,
+   "lon": 11.27933855,
+   "weight": 1.11,
+   "ele": null
+  },
+  {
+   "name": "Ickinger Stausee",
+   "kind": "lake",
+   "lat": 47.94890135,
+   "lon": 11.45266425,
+   "weight": 1.1,
+   "ele": null
+  },
+  {
+   "name": "Nu\u00dfberger Weiher",
+   "kind": "lake",
+   "lat": 47.8408879,
+   "lon": 11.25753565,
+   "weight": 1.09,
+   "ele": "633"
+  },
+  {
+   "name": "Feldmochinger See",
+   "kind": "lake",
+   "lat": 48.2133641,
+   "lon": 11.51392725,
+   "weight": 1.08,
+   "ele": null
+  },
+  {
+   "name": "Harmatinger Weiher",
+   "kind": "lake",
+   "lat": 47.88543775,
+   "lon": 11.52925055,
+   "weight": 1.07,
+   "ele": "622"
+  },
+  {
+   "name": "Langwieder See",
+   "kind": "lake",
+   "lat": 48.1956807,
+   "lon": 11.41480385,
+   "weight": 1.07,
+   "ele": null
+  },
+  {
+   "name": "Karlsfelder See",
+   "kind": "lake",
+   "lat": 48.2370123,
+   "lon": 11.468669349999999,
+   "weight": 1.07,
+   "ele": null
+  },
+  {
+   "name": "Fohnsee",
+   "kind": "lake",
+   "lat": 47.78013935,
+   "lon": 11.31280615,
+   "weight": 1.07,
+   "ele": "588"
+  },
+  {
+   "name": "Deixlfurter See",
+   "kind": "lake",
+   "lat": 47.9197116,
+   "lon": 11.25427995,
+   "weight": 1.07,
+   "ele": null
+  },
+  {
+   "name": "Gallaweiher",
+   "kind": "lake",
+   "lat": 47.8659713,
+   "lon": 11.25358375,
+   "weight": 1.07,
+   "ele": null
+  },
+  {
+   "name": "Riemer See",
+   "kind": "lake",
+   "lat": 48.1267992,
+   "lon": 11.70557305,
+   "weight": 1.06,
+   "ele": null
+  },
+  {
+   "name": "Lu\u00dfsee",
+   "kind": "lake",
+   "lat": 48.19798045,
+   "lon": 11.41868385,
+   "weight": 1.06,
+   "ele": null
+  },
+  {
+   "name": "Stallauer Weiher",
+   "kind": "lake",
+   "lat": 47.74998455,
+   "lon": 11.49773295,
+   "weight": 1.06,
+   "ele": "710"
+  },
+  {
+   "name": "Froschhauser See",
+   "kind": "lake",
+   "lat": 47.6860038,
+   "lon": 11.2260798,
+   "weight": 1.06,
+   "ele": "656"
+  },
+  {
+   "name": "Isarkanal",
+   "kind": "lake",
+   "lat": 48.211226550000006,
+   "lon": 11.7090074,
+   "weight": 1.06,
+   "ele": null
+  },
+  {
+   "name": "Fasaneriesee",
+   "kind": "lake",
+   "lat": 48.20415055,
+   "lon": 11.529298,
+   "weight": 1.05,
+   "ele": null
+  },
+  {
+   "name": "Regattaparksee",
+   "kind": "lake",
+   "lat": 48.242117050000004,
+   "lon": 11.52176325,
+   "weight": 1.05,
+   "ele": null
+  },
+  {
+   "name": "Olchinger See",
+   "kind": "lake",
+   "lat": 48.2090941,
+   "lon": 11.357255550000001,
+   "weight": 1.05,
+   "ele": null
+  },
+  {
+   "name": "Fiechtnersee",
+   "kind": "lake",
+   "lat": 47.8353594,
+   "lon": 11.4783688,
+   "weight": 1.05,
+   "ele": null
+  },
+  {
+   "name": "We\u00dflinger See",
+   "kind": "lake",
+   "lat": 48.072489250000004,
+   "lon": 11.25053955,
+   "weight": 1.05,
+   "ele": null
+  },
+  {
+   "name": "Kiessee",
+   "kind": "lake",
+   "lat": 48.1691393,
+   "lon": 11.68952105,
+   "weight": 1.05,
+   "ele": null
+  },
+  {
+   "name": "Gro\u00dfer Olympiasee",
+   "kind": "lake",
+   "lat": 48.1724263,
+   "lon": 11.553300700000001,
+   "weight": 1.05,
+   "ele": null
+  },
+  {
+   "name": "Abfanggraben",
+   "kind": "lake",
+   "lat": 48.173753149999996,
+   "lon": 11.68631995,
+   "weight": 1.04,
+   "ele": null
+  },
+  {
+   "name": "Heimstettener See",
+   "kind": "lake",
+   "lat": 48.15582055,
+   "lon": 11.738643,
+   "weight": 1.04,
+   "ele": null
+  },
+  {
+   "name": "Streitberger Weiher",
+   "kind": "lake",
+   "lat": 47.78372095,
+   "lon": 11.2673088,
+   "weight": 1.04,
+   "ele": null
+  },
+  {
+   "name": "Langer K\u00f6chel See",
+   "kind": "lake",
+   "lat": 47.63076475,
+   "lon": 11.1506744,
+   "weight": 1.04,
+   "ele": null
+  },
+  {
+   "name": "Waldschwaigsee",
+   "kind": "lake",
+   "lat": 48.225310699999994,
+   "lon": 11.437667699999999,
+   "weight": 1.04,
+   "ele": "489"
+  },
+  {
+   "name": "Kleinhesseloher See",
+   "kind": "lake",
+   "lat": 48.1594142,
+   "lon": 11.5961931,
+   "weight": 1.04,
+   "ele": null
+  },
+  {
+   "name": "Frechensee",
+   "kind": "lake",
+   "lat": 47.80902225,
+   "lon": 11.286987499999999,
+   "weight": 1.04,
+   "ele": null
+  },
+  {
+   "name": "Poschinger Weiher",
+   "kind": "lake",
+   "lat": 48.20096025,
+   "lon": 11.6433438,
+   "weight": 1.04,
+   "ele": null
+  },
+  {
+   "name": "Hackensee",
+   "kind": "lake",
+   "lat": 47.848463800000005,
+   "lon": 11.641969549999999,
+   "weight": 1.04,
+   "ele": null
+  },
+  {
+   "name": "Westlicher Breitenauersee",
+   "kind": "lake",
+   "lat": 47.7951162,
+   "lon": 11.295473099999999,
+   "weight": 1.04,
+   "ele": null
+  },
+  {
+   "name": "Stechsee",
+   "kind": "lake",
+   "lat": 47.80598935,
+   "lon": 11.29855255,
+   "weight": 1.03,
+   "ele": "588"
+  },
+  {
+   "name": "Gr\u00f6bensee",
+   "kind": "lake",
+   "lat": 47.811277950000004,
+   "lon": 11.299674,
+   "weight": 1.03,
+   "ele": null
+  },
+  {
+   "name": "Bibisee",
+   "kind": "lake",
+   "lat": 47.834996000000004,
+   "lon": 11.4723683,
+   "weight": 1.03,
+   "ele": null
+  },
+  {
+   "name": "Gartensee",
+   "kind": "lake",
+   "lat": 47.8170729,
+   "lon": 11.30106435,
+   "weight": 1.03,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 48.1117912,
+   "lon": 11.6445437,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 48.0692055,
+   "lon": 11.5768628,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Steg an der Marienklause",
+   "kind": "viewpoint",
+   "lat": 48.0926156,
+   "lon": 11.550243,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Bavaria",
+   "kind": "viewpoint",
+   "lat": 48.1306873,
+   "lon": 11.5459393,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 48.2097588,
+   "lon": 11.3235601,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 47.6325385,
+   "lon": 11.3536269,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Malerwinkel",
+   "kind": "viewpoint",
+   "lat": 47.8382749,
+   "lon": 11.5092357,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Monopteros",
+   "kind": "viewpoint",
+   "lat": 48.176903,
+   "lon": 11.7987913,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 47.8736931,
+   "lon": 11.3735093,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Riemerschmid Gedenkstein",
+   "kind": "viewpoint",
+   "lat": 47.9347173,
+   "lon": 11.4311671,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 48.2375212,
+   "lon": 11.4648519,
+   "weight": 1.0,
+   "ele": "505"
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 48.1778954,
+   "lon": 11.439632,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 48.1704799,
+   "lon": 11.399641,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Isartalblick",
+   "kind": "viewpoint",
+   "lat": 48.0207286,
+   "lon": 11.5023985,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Zugspitzblick",
+   "kind": "viewpoint",
+   "lat": 48.004946,
+   "lon": 11.4860335,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 47.9363226,
+   "lon": 11.4323351,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 47.9066258,
+   "lon": 11.188224,
+   "weight": 1.0,
+   "ele": "675"
+  },
+  {
+   "name": "Kerschlach",
+   "kind": "viewpoint",
+   "lat": 47.9228235,
+   "lon": 11.2044361,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 47.6196355,
+   "lon": 11.3143622,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 47.6468975,
+   "lon": 11.3808003,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Prinzenruh",
+   "kind": "viewpoint",
+   "lat": 47.7083594,
+   "lon": 11.7164507,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 48.1368643,
+   "lon": 11.6804808,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 47.6758764,
+   "lon": 11.1989456,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 47.6066807,
+   "lon": 11.314703,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 47.7403078,
+   "lon": 11.7168272,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Ilkah\u00f6he",
+   "kind": "viewpoint",
+   "lat": 47.9020195,
+   "lon": 11.2497963,
+   "weight": 1.0,
+   "ele": "726"
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 47.7549815,
+   "lon": 11.3941548,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 47.7546415,
+   "lon": 11.3905322,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 47.7562828,
+   "lon": 11.394075,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Dorfener H\u00f6he",
+   "kind": "viewpoint",
+   "lat": 47.9205834,
+   "lon": 11.410346,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 48.185614,
+   "lon": 11.5515028,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 47.6376961,
+   "lon": 11.3274703,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 47.6129969,
+   "lon": 11.7434272,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 47.7395819,
+   "lon": 11.3834586,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Turm des Rathauses",
+   "kind": "viewpoint",
+   "lat": 48.1374975,
+   "lon": 11.5754999,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Deutsches Museum",
+   "kind": "viewpoint",
+   "lat": 48.1297388,
+   "lon": 11.5819874,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Bismarckturm Assenhausen",
+   "kind": "viewpoint",
+   "lat": 47.9424424,
+   "lon": 11.3431396,
+   "weight": 1.0,
+   "ele": "665"
+  },
+  {
+   "name": "Ludwigsh\u00f6he",
+   "kind": "viewpoint",
+   "lat": 47.9677002,
+   "lon": 11.5146276,
+   "weight": 1.0,
+   "ele": "690"
+  },
+  {
+   "name": "Peretshofer H\u00f6he",
+   "kind": "viewpoint",
+   "lat": 47.8565795,
+   "lon": 11.5255847,
+   "weight": 1.0,
+   "ele": "729"
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 47.7546116,
+   "lon": 11.5072794,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 48.1675966,
+   "lon": 11.5526399,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 48.1101867,
+   "lon": 11.5418807,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 47.9736348,
+   "lon": 11.1827828,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Aussichtspunkt \u00fcber Maisinger Schlucht",
+   "kind": "viewpoint",
+   "lat": 47.9942501,
+   "lon": 11.3115447,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 48.1894232,
+   "lon": 11.6331929,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Walchst\u00e4dter H\u00f6he",
+   "kind": "viewpoint",
+   "lat": 47.9411199,
+   "lon": 11.415043,
+   "weight": 1.0,
+   "ele": "703"
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 48.1827145,
+   "lon": 11.7764715,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Kloster Benediktbeuern-Ausblick",
+   "kind": "viewpoint",
+   "lat": 47.7102429,
+   "lon": 11.3954649,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 48.0429148,
+   "lon": 11.6020028,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Pfarrbichl",
+   "kind": "viewpoint",
+   "lat": 47.9026367,
+   "lon": 11.1925902,
+   "weight": 1.0,
+   "ele": "679"
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 47.7033807,
+   "lon": 11.7622206,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 48.2098739,
+   "lon": 11.5115662,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 48.0199019,
+   "lon": 11.4492134,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Tunnelblick",
+   "kind": "viewpoint",
+   "lat": 48.0850367,
+   "lon": 11.2043709,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 48.1468762,
+   "lon": 11.698533,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 47.8580909,
+   "lon": 11.3961138,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 47.7705169,
+   "lon": 11.4313872,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 47.7740137,
+   "lon": 11.5076481,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Brahmspromenade",
+   "kind": "viewpoint",
+   "lat": 47.9134401,
+   "lon": 11.2880325,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 47.9997438,
+   "lon": 11.152049,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 47.7058916,
+   "lon": 11.6841113,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 47.9393487,
+   "lon": 11.5399521,
+   "weight": 1.0,
+   "ele": "690"
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 48.0147364,
+   "lon": 11.1930442,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 47.847686,
+   "lon": 11.5822483,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 48.0387842,
+   "lon": 11.2313738,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 47.8241536,
+   "lon": 11.5038282,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 47.8790224,
+   "lon": 11.5075474,
+   "weight": 1.0,
+   "ele": "634"
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 47.7513443,
+   "lon": 11.7423306,
+   "weight": 1.0,
+   "ele": "784.07"
+  },
+  {
+   "name": "Ludwigsh\u00f6he",
+   "kind": "viewpoint",
+   "lat": 47.677203,
+   "lon": 11.1917029,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Possenhofen",
+   "kind": "viewpoint",
+   "lat": 47.9564692,
+   "lon": 11.3136209,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 48.0320662,
+   "lon": 11.3654008,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 48.1722632,
+   "lon": 11.5693933,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 47.8759776,
+   "lon": 11.2886233,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 47.6696523,
+   "lon": 11.2062993,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 47.6931204,
+   "lon": 11.209909,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Aussichtspunkt Am Eichholz",
+   "kind": "viewpoint",
+   "lat": 47.6766309,
+   "lon": 11.2094691,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 47.6756051,
+   "lon": 11.1927643,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 47.6858958,
+   "lon": 11.2160315,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 47.6697332,
+   "lon": 11.195922,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 47.6764816,
+   "lon": 11.2072901,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 47.6802887,
+   "lon": 11.1928916,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 47.6693008,
+   "lon": 11.1864758,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 47.6741082,
+   "lon": 11.1866488,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 47.7340962,
+   "lon": 11.7616028,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 47.8275164,
+   "lon": 11.7570597,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 47.6874974,
+   "lon": 11.1791854,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Aussichtspunkt Isar Kraftwerk H\u00f6llriegelskreuth",
+   "kind": "viewpoint",
+   "lat": 48.0251429,
+   "lon": 11.4929084,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 48.2439062,
+   "lon": 11.5630583,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Aussichtsturm",
+   "kind": "viewpoint",
+   "lat": 48.1221048,
+   "lon": 11.7064193,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 48.2116033,
+   "lon": 11.614889,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Seeblick",
+   "kind": "viewpoint",
+   "lat": 47.9409373,
+   "lon": 11.3086472,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Seeblick",
+   "kind": "viewpoint",
+   "lat": 47.9420519,
+   "lon": 11.3103252,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 47.715609,
+   "lon": 11.2339007,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 47.7635274,
+   "lon": 11.5557448,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 47.668455,
+   "lon": 11.1632434,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 47.6695407,
+   "lon": 11.1893366,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 47.6682189,
+   "lon": 11.2097306,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 47.6693929,
+   "lon": 11.2068705,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 47.6695682,
+   "lon": 11.2050731,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 48.0266498,
+   "lon": 11.3764783,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Blick auf Georgenstein",
+   "kind": "viewpoint",
+   "lat": 48.0230759,
+   "lon": 11.496344,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Prinzenruh",
+   "kind": "viewpoint",
+   "lat": 47.7083061,
+   "lon": 11.7165288,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 47.6235724,
+   "lon": 11.3610068,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 48.0185588,
+   "lon": 11.3703641,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 48.027881,
+   "lon": 11.4963356,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Wei\u00dfe Wand",
+   "kind": "viewpoint",
+   "lat": 47.9422542,
+   "lon": 11.4335218,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 47.9924348,
+   "lon": 11.4522302,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Zugspitzblick",
+   "kind": "viewpoint",
+   "lat": 47.6074527,
+   "lon": 11.4436982,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 48.0587808,
+   "lon": 11.528044,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Jasberg",
+   "kind": "viewpoint",
+   "lat": 47.8917697,
+   "lon": 11.6370088,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 47.6551424,
+   "lon": 11.618608,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 47.7902432,
+   "lon": 11.2922695,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 47.8110665,
+   "lon": 11.5293167,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 47.9621117,
+   "lon": 11.4362151,
+   "weight": 1.0,
+   "ele": "701"
+  },
+  {
+   "name": "Panzerkuppe",
+   "kind": "viewpoint",
+   "lat": 47.947629,
+   "lon": 11.2779849,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Stonehenge",
+   "kind": "viewpoint",
+   "lat": 48.1795152,
+   "lon": 11.7989112,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 47.707004,
+   "lon": 11.7706534,
+   "weight": 1.0,
+   "ele": "1065"
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 48.1147608,
+   "lon": 11.6404897,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 47.7868959,
+   "lon": 11.3436349,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 47.6887628,
+   "lon": 11.6733733,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 47.7236299,
+   "lon": 11.798214,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 48.2142765,
+   "lon": 11.6304337,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 48.2349685,
+   "lon": 11.6686266,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Isartalblick aufs Stauwehr",
+   "kind": "viewpoint",
+   "lat": 48.0261349,
+   "lon": 11.5101494,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 47.8750337,
+   "lon": 11.2875226,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 47.6751643,
+   "lon": 11.1963872,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 47.6786708,
+   "lon": 11.1915551,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 47.6810616,
+   "lon": 11.1953364,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 47.9318734,
+   "lon": 11.4276912,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 47.6160519,
+   "lon": 11.7412003,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Loeb-Grab",
+   "kind": "viewpoint",
+   "lat": 47.6749359,
+   "lon": 11.1830791,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Aussichtspunkt Starnberger See",
+   "kind": "viewpoint",
+   "lat": 48.0153503,
+   "lon": 11.3407093,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 47.7714085,
+   "lon": 11.3173741,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 47.7254775,
+   "lon": 11.7905133,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 47.6042698,
+   "lon": 11.5174922,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 47.9100423,
+   "lon": 11.6112091,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 47.8595927,
+   "lon": 11.5215404,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Wallberg Fernrohr",
+   "kind": "viewpoint",
+   "lat": 47.6611459,
+   "lon": 11.7926036,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Hahnbauern-Kreuz",
+   "kind": "viewpoint",
+   "lat": 47.7566842,
+   "lon": 11.5139862,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 47.9880312,
+   "lon": 11.2804673,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 47.8128615,
+   "lon": 11.637002,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Zwiesel",
+   "kind": "viewpoint",
+   "lat": 47.7235563,
+   "lon": 11.4885004,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 48.1951242,
+   "lon": 11.4952213,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 47.942598,
+   "lon": 11.4340297,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 47.6806335,
+   "lon": 11.744344,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 47.6926701,
+   "lon": 11.7211399,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 47.6829399,
+   "lon": 11.7330352,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 47.6992097,
+   "lon": 11.7884572,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 47.6346534,
+   "lon": 11.4366801,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Waldfernseher",
+   "kind": "viewpoint",
+   "lat": 47.7365569,
+   "lon": 11.5114182,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 47.8295025,
+   "lon": 11.5662279,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 47.6793588,
+   "lon": 11.6129604,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 47.9994327,
+   "lon": 11.2638217,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 48.2121525,
+   "lon": 11.451556,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 48.1713612,
+   "lon": 11.571582,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 48.1723897,
+   "lon": 11.5713617,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 48.1124273,
+   "lon": 11.7295801,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Parsberg",
+   "kind": "viewpoint",
+   "lat": 48.1447853,
+   "lon": 11.3452686,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 48.0123634,
+   "lon": 11.1607615,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 48.0122176,
+   "lon": 11.1603676,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 47.7458522,
+   "lon": 11.7244116,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 48.1234209,
+   "lon": 11.5102108,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 47.6232029,
+   "lon": 11.364771,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 48.1112757,
+   "lon": 11.3108607,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 48.1242809,
+   "lon": 11.5289042,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Denkmal Theodor Lechner",
+   "kind": "viewpoint",
+   "lat": 47.9379229,
+   "lon": 11.4310246,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 47.7523533,
+   "lon": 11.6824591,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Blick auf Burg Gr\u00fcnwald",
+   "kind": "viewpoint",
+   "lat": 48.04506,
+   "lon": 11.5133136,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 47.6559992,
+   "lon": 11.3590977,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 48.1699076,
+   "lon": 11.5515864,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 47.6189206,
+   "lon": 11.3387179,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 47.9638685,
+   "lon": 11.3480765,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 47.7284663,
+   "lon": 11.7709195,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Giraffengehege",
+   "kind": "viewpoint",
+   "lat": 48.0992782,
+   "lon": 11.554537,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 48.1221364,
+   "lon": 11.5824001,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 47.7245253,
+   "lon": 11.4904524,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 47.8058722,
+   "lon": 11.3771304,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 47.6061508,
+   "lon": 11.3147215,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 47.6066365,
+   "lon": 11.3161579,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 47.6476484,
+   "lon": 11.3654718,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 47.62122,
+   "lon": 11.3988947,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Damit alles flie\u00dft",
+   "kind": "viewpoint",
+   "lat": 48.207729,
+   "lon": 11.6443223,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 48.194742,
+   "lon": 11.6372989,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 47.9175761,
+   "lon": 11.4189658,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Dorfner H\u00f6he",
+   "kind": "viewpoint",
+   "lat": 47.9197527,
+   "lon": 11.4101447,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 47.6604608,
+   "lon": 11.4102984,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 48.1198886,
+   "lon": 11.1648058,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 47.6440393,
+   "lon": 11.3713426,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 47.958047,
+   "lon": 11.7828745,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 48.0755723,
+   "lon": 11.6475818,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 48.1493809,
+   "lon": 11.4835023,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 47.7041007,
+   "lon": 11.7922088,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 48.1376346,
+   "lon": 11.5931797,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 48.1728753,
+   "lon": 11.5563689,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 48.136562,
+   "lon": 11.5933076,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 47.7335739,
+   "lon": 11.507274,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 47.956025,
+   "lon": 11.4488485,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 47.7354184,
+   "lon": 11.4983104,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 47.6902649,
+   "lon": 11.4217665,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 47.8548922,
+   "lon": 11.5280553,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 47.737112,
+   "lon": 11.4680025,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 48.0429672,
+   "lon": 11.5153679,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Gamsk\u00f6pfl",
+   "kind": "viewpoint",
+   "lat": 47.6351245,
+   "lon": 11.3652775,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 47.761986,
+   "lon": 11.4563723,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 48.1400248,
+   "lon": 11.2666647,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 47.8845009,
+   "lon": 11.7936534,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 47.8114803,
+   "lon": 11.7539733,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 48.0956299,
+   "lon": 11.5536173,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 47.6197004,
+   "lon": 11.3397364,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 47.6077476,
+   "lon": 11.3110888,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 47.8540654,
+   "lon": 11.5662633,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 47.7875353,
+   "lon": 11.3811328,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 47.9518897,
+   "lon": 11.3096948,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Wallberg Fernrohr",
+   "kind": "viewpoint",
+   "lat": 47.6658887,
+   "lon": 11.7966601,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 48.1966599,
+   "lon": 11.5042305,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 48.1965073,
+   "lon": 11.5050702,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 47.6461551,
+   "lon": 11.379945,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 47.6250813,
+   "lon": 11.2537019,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 48.002544,
+   "lon": 11.4734891,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 47.8026872,
+   "lon": 11.5488397,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 48.18857,
+   "lon": 11.5416671,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 48.1305665,
+   "lon": 11.7103563,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 48.0267576,
+   "lon": 11.4939595,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Heideblick",
+   "kind": "viewpoint",
+   "lat": 48.215216,
+   "lon": 11.6100643,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Flakh\u00fcgel",
+   "kind": "viewpoint",
+   "lat": 48.2228461,
+   "lon": 11.6099276,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 47.9997062,
+   "lon": 11.4760531,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 47.7136427,
+   "lon": 11.7263369,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 48.0120097,
+   "lon": 11.4798146,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Mesnerbichl",
+   "kind": "viewpoint",
+   "lat": 47.9459327,
+   "lon": 11.1945763,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 48.0479295,
+   "lon": 11.5171052,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 48.0962751,
+   "lon": 11.2084071,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 48.2271383,
+   "lon": 11.661286,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 47.6791473,
+   "lon": 11.2326702,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 47.6578371,
+   "lon": 11.3772421,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 47.6899863,
+   "lon": 11.2859064,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 47.8280737,
+   "lon": 11.7830446,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 48.1192697,
+   "lon": 11.579245,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 47.6523212,
+   "lon": 11.3680333,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Kiesgrube - Bauschuttdeponie",
+   "kind": "viewpoint",
+   "lat": 48.0898131,
+   "lon": 11.4351072,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 48.2041828,
+   "lon": 11.6473716,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 47.7299484,
+   "lon": 11.6107275,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 47.6352158,
+   "lon": 11.3692822,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 48.21276,
+   "lon": 11.6284085,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 48.0463392,
+   "lon": 11.5141117,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 48.0652759,
+   "lon": 11.2032629,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 48.0896782,
+   "lon": 11.4148623,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Flakh\u00fcgel",
+   "kind": "viewpoint",
+   "lat": 48.2228305,
+   "lon": 11.6110543,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Alpenpanorama",
+   "kind": "viewpoint",
+   "lat": 47.7713581,
+   "lon": 11.3226562,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 48.0653607,
+   "lon": 11.2063828,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 48.2043179,
+   "lon": 11.6451122,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 47.7840356,
+   "lon": 11.299582,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 47.6770298,
+   "lon": 11.791903,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 47.8193141,
+   "lon": 11.3020297,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 48.1832019,
+   "lon": 11.5531703,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Weinberg",
+   "kind": "viewpoint",
+   "lat": 48.2260182,
+   "lon": 11.2341347,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 47.7663583,
+   "lon": 11.4070062,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 47.6366346,
+   "lon": 11.3646867,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 47.9768156,
+   "lon": 11.4484212,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Schloss Possenhoffen",
+   "kind": "viewpoint",
+   "lat": 47.9580564,
+   "lon": 11.3145544,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 47.6148565,
+   "lon": 11.2299031,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 47.9538334,
+   "lon": 11.4363039,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "S\u00fcdturm",
+   "kind": "viewpoint",
+   "lat": 48.1384569,
+   "lon": 11.5729704,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 47.6622392,
+   "lon": 11.2382606,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 47.6995393,
+   "lon": 11.7100044,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 47.7025629,
+   "lon": 11.7111742,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 47.9435894,
+   "lon": 11.3071505,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 47.9976183,
+   "lon": 11.3384685,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Gams-Fernrohr",
+   "kind": "viewpoint",
+   "lat": 47.6408063,
+   "lon": 11.7854616,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 48.1679515,
+   "lon": 11.550257,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 47.9810458,
+   "lon": 11.282628,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 47.657778,
+   "lon": 11.7724863,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Laufkraftwerk",
+   "kind": "viewpoint",
+   "lat": 48.1366898,
+   "lon": 11.2088345,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Weiherblick",
+   "kind": "viewpoint",
+   "lat": 48.1343651,
+   "lon": 11.3073776,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Gasz\u00e4hlerwerkstatt",
+   "kind": "viewpoint",
+   "lat": 48.1737294,
+   "lon": 11.5334347,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Pfarrstadel",
+   "kind": "viewpoint",
+   "lat": 48.070195,
+   "lon": 11.2478854,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 47.6615256,
+   "lon": 11.7719932,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Ausblick Leonhardstein",
+   "kind": "viewpoint",
+   "lat": 47.640282,
+   "lon": 11.7009399,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Einblick",
+   "kind": "viewpoint",
+   "lat": 47.6408693,
+   "lon": 11.6987865,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 47.6646505,
+   "lon": 11.7712732,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 48.1411123,
+   "lon": 11.2913892,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 48.1378642,
+   "lon": 11.4106549,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 48.0433236,
+   "lon": 11.5196466,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 48.1663533,
+   "lon": 11.6680267,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 48.1671755,
+   "lon": 11.6725672,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 48.2228964,
+   "lon": 11.1666794,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 47.6310943,
+   "lon": 11.3896101,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 48.1709269,
+   "lon": 11.5483866,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 48.1845844,
+   "lon": 11.7963506,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 48.1711557,
+   "lon": 11.7530224,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 47.8256068,
+   "lon": 11.3019845,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 48.0026425,
+   "lon": 11.3203236,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 47.9477027,
+   "lon": 11.2977898,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 48.0030631,
+   "lon": 11.4942265,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 47.7506028,
+   "lon": 11.7434344,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 47.7635509,
+   "lon": 11.3071372,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 47.9979277,
+   "lon": 11.3386022,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 47.6061367,
+   "lon": 11.3341776,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Kollmayerh\u00f6he",
+   "kind": "viewpoint",
+   "lat": 47.7560673,
+   "lon": 11.5673422,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 47.9094518,
+   "lon": 11.6140528,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 47.8462195,
+   "lon": 11.6679964,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 47.9552608,
+   "lon": 11.3616294,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 47.7143057,
+   "lon": 11.726554,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 47.7161071,
+   "lon": 11.2542028,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 47.6868148,
+   "lon": 11.1816814,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 47.6483103,
+   "lon": 11.361654,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Alter Peter - Aussichtsturm",
+   "kind": "viewpoint",
+   "lat": 48.1365477,
+   "lon": 11.5755941,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Saurierwald",
+   "kind": "viewpoint",
+   "lat": 48.0913893,
+   "lon": 11.6758976,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 47.9414215,
+   "lon": 11.309776,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 48.1603175,
+   "lon": 11.7481532,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 47.8731046,
+   "lon": 11.2896177,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 47.71702,
+   "lon": 11.7556332,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 48.0988791,
+   "lon": 11.5556339,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Asam-Punkt",
+   "kind": "viewpoint",
+   "lat": 47.6683,
+   "lon": 11.1827973,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 48.1939527,
+   "lon": 11.5110217,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 48.1924481,
+   "lon": 11.5173611,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 48.1971223,
+   "lon": 11.5021663,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 47.9913527,
+   "lon": 11.2738627,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 48.249562,
+   "lon": 11.6622484,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Rodelh\u00fcgel",
+   "kind": "viewpoint",
+   "lat": 48.130611,
+   "lon": 11.7104209,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 47.9109366,
+   "lon": 11.44796,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 47.78859,
+   "lon": 11.2952511,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 47.6178258,
+   "lon": 11.2716395,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 48.0969705,
+   "lon": 11.5573129,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 47.6062894,
+   "lon": 11.2437303,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Vogelbeobachtung",
+   "kind": "viewpoint",
+   "lat": 48.1555305,
+   "lon": 11.4942759,
+   "weight": 1.0,
+   "ele": null
+  },
+  {
+   "name": "Viewpoint",
+   "kind": "viewpoint",
+   "lat": 47.6418243,
+   "lon": 11.734952,
+   "weight": 1.0,
+   "ele": null
+  }
+ ]
+}

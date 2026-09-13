@@ -563,3 +563,143 @@ if os.path.isdir(WEB):
     @app.get("/cells")
     def cells_page():
         return FileResponse(os.path.join(WEB, "cells.html"))
+
+
+# ---------------------------------------------------------------------------
+# The product: weather notification -> scenic ride suggestion -> map.
+# Everything below is what a customer sees; /cells stays as the engineering
+# view of the same machinery.
+# ---------------------------------------------------------------------------
+
+from engine import rider_profile as _profile  # noqa: E402
+from engine import rideworthy as _weather  # noqa: E402
+from engine import scenic as _scenic  # noqa: E402
+
+_ride_state: dict = {"index": None, "profiles": {}}
+
+RIDERS = {"A": "exampleUserA", "B": "exampleUserB", "C": "exampleUserC"}
+
+
+def get_scenic_index():
+    if _ride_state["index"] is None:
+        _ride_state["index"] = _scenic.ScenicIndex(get_road_graph(),
+                                                   _scenic.load_pois())
+    return _ride_state["index"]
+
+
+def get_profile(rider: str) -> dict:
+    """Cached: a profile is ~40 CSV files and does not change between asks."""
+    rider = rider.upper()
+    if rider not in RIDERS:
+        raise HTTPException(404, f"unknown rider {rider}; try one of {list(RIDERS)}")
+    if rider not in _ride_state["profiles"]:
+        folder = os.path.join(DATASET, RIDERS[rider], "recordedTrips")
+        if not os.path.isdir(folder):
+            raise HTTPException(503, f"rider data not found at {folder}")
+        _ride_state["profiles"][rider] = _profile.build(folder)
+    return _ride_state["profiles"][rider]
+
+
+@app.get("/api/ride/profile/{rider}")
+def ride_profile(rider: str):
+    p = dict(get_profile(rider))
+    p.pop("ridden_squares", None)        # thousands of codes; not for the wire
+    p["rider"] = rider.upper()
+    return p
+
+
+@app.get("/api/ride/windows")
+def ride_windows(rider: str = "A", days: int = 7):
+    """The notification. Every rideable stretch in the forecast, best first."""
+    p = get_profile(rider)
+    home = p.get("home") or {"lat": 48.137, "lon": 11.576}
+    w = _weather.windows(home["lat"], home["lon"], days=days)
+    for win in w["windows"]:
+        win["headline"] = _weather.headline(win)
+        # What the rider actually has time for: their own typical ride, unless
+        # the good weather is shorter than that.
+        # Long enough to actually get somewhere. A rider whose commute is
+        # 39 minutes still needs about two and a half hours to reach the lakes
+        # from Munich and get back, so the floor is what the geography costs,
+        # not what their weekday riding looks like.
+        typical = p.get("typical_ride_min") or 90
+        win["suggested_minutes"] = int(min(win["ride_minutes"],
+                                           max(150, typical * 3)))
+    w["home"] = home
+    w["rider"] = rider.upper()
+    # Delivery is the one piece not built: this is the payload a push would
+    # carry, not a push.
+    w["delivery"] = "in-app (no push channel wired)"
+    return w
+
+
+@app.post("/api/ride/suggest")
+def ride_suggest(body: dict):
+    """A named ride: out of town, round the scenic points, home again."""
+    rider = (body.get("rider") or "A").upper()
+    p = get_profile(rider)
+    minutes = float(body.get("minutes") or p.get("typical_ride_min") or 120)
+    origin_ll = body.get("origin") or [p["home"]["lat"], p["home"]["lon"]]
+    if not _in_bbox(origin_ll):
+        raise HTTPException(400, "origin is outside the cached road tiles")
+
+    g = get_road_graph()
+    cg = get_cell_graph()
+    rider_obj = _cells.Rider(cg, ridden=p.get("ridden_squares"),
+                             lean_p95=p.get("lean_ceiling") or 35.0)
+    weather_risk = float(body.get("weather") or 0.0)
+    cost = _croads.RoadCost(g, _cells.Cost(cg, rider_obj, weather_risk),
+                            escape=bool(body.get("escape", True)))
+    origin = g.nearest_node(*origin_ll)
+
+    got = _scenic.plan_scenic_loop(
+        g, cost, get_scenic_index(), origin, minutes,
+        alpha=float(body.get("alpha", 3.0)),
+        max_stops=int(body.get("max_stops", 3)),
+        south_bias=body.get("south_bias"))
+
+    if not got["routes"]:
+        # Fall back to the bearing joyride rather than showing nothing -- and
+        # say which one the rider is looking at.
+        loops = _croads.joyride(g, cost, origin, minutes,
+                                alpha=float(body.get("alpha", 3.0)))
+        return {"rider": rider, "minutes": minutes, "kind": "loop",
+                "origin": list(g.node_pos(origin)),
+                "reason": got.get("reason"),
+                "routes": [{k: r[k] for k in
+                            ("label", "bearing", "coords", "kpis", "roads",
+                             "value_thirds", "urban_share")} for r in loops]}
+
+    # How much of the road network this rider's own lean ceiling removed. It is
+    # the difference between Starnberger See and Tegernsee for rider A, so the
+    # product says it rather than quietly handing over a lesser ride.
+    excluded = sum(1 for seg in g.segments if cost.excluded(seg))
+
+    r = got["routes"][0]
+    return {
+        "rider": rider, "minutes": minutes, "kind": "scenic-chain",
+        "origin": list(g.node_pos(origin)),
+        "origin_urban": round(g.urban_of_node(origin), 2),
+        "lean_ceiling": p.get("lean_ceiling"),
+        "bike_class": p.get("bike_class"),
+        "excluded_segments": excluded,
+        "total_segments": len(g.segments),
+        "routes": [{k: r[k] for k in
+                    ("label", "coords", "kpis", "roads", "stops", "legs",
+                     "visited", "value_thirds", "urban_share")}],
+    }
+
+
+@app.get("/api/ride/pois")
+def ride_pois(limit: int = 400):
+    idx = get_scenic_index()
+    pois = sorted(idx.pois, key=lambda p: -p["weight"])[:limit]
+    return {"total": len(idx.pois),
+            "pois": [{k: p[k] for k in ("name", "kind", "lat", "lon", "weight")}
+                     for p in pois]}
+
+
+if os.path.isdir(WEB):
+    @app.get("/ride")
+    def ride_page():
+        return FileResponse(os.path.join(WEB, "ride.html"))
