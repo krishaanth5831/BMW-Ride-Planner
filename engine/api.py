@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import os
+import random
 import shutil
 import tempfile
 import zipfile
@@ -19,6 +20,8 @@ from fastapi.staticfiles import StaticFiles
 
 from engine import weather as weather_mod
 from engine import demo as demo_data
+from engine import ride_data
+from engine.cache import lock_for
 from engine.profile import build_profile
 from engine.router import Graph, plan_alternatives, plan_heatmap, plan_loop
 from engine.scoring import Scorer
@@ -91,8 +94,10 @@ def health():
         return JSONResponse({"ok": False, "detail": e.detail}, status_code=503)
 
 
-def _in_bbox(point: tuple[float, float], bbox: list | tuple) -> bool:
+def _in_bbox(point: tuple[float, float], bbox: list | tuple | None = None) -> bool:
     lat, lon = point
+    if bbox is None:
+        bbox = _croads.BBOX
     south, west, north, east = map(float, bbox)
     return south <= lat <= north and west <= lon <= east
 
@@ -369,30 +374,24 @@ _cell_state: dict = {"graph": None, "roads": None, "blob": None, "demo": None}
 def _cell_blob() -> dict:
     """Use real generated telemetry when present, else the neutral demo layer."""
     if _cell_state["blob"] is None:
-        path = os.path.join(DATA, "cell_graph.json")
-        blob = None
-        try:
-            with open(path) as fh:
-                candidate = json.load(fh)
-            if candidate.get("cells") and candidate.get("edges"):
-                blob = candidate
-        except (OSError, ValueError, TypeError):
-            pass
-        _cell_state["demo"] = blob is None
-        _cell_state["blob"] = blob or demo_data.NEUTRAL_CELL_GRAPH
+        blob = ride_data.crowd_blob()
+        _cell_state["demo"] = not bool(blob.get("cells"))
+        _cell_state["blob"] = blob
     return _cell_state["blob"]
 
 
 def get_cell_graph():
-    if _cell_state["graph"] is None:
-        _cell_state["graph"] = _cells.CellGraph(_cell_blob())
+    with lock_for("api-cell-graph"):
+        if _cell_state["graph"] is None:
+            _cell_state["graph"] = _cells.CellGraph(_cell_blob())
     return _cell_state["graph"]
 
 
 def get_road_graph():
     """OSM geometry with morton-cell costs. Built once; ~3 s and ~66k segments."""
-    if _cell_state["roads"] is None:
-        _cell_state["roads"] = _croads.load_blob(_cell_blob())
+    with lock_for("api-road-graph"):
+        if _cell_state["roads"] is None:
+            _cell_state["roads"] = _croads.load_blob(_cell_blob())
     return _cell_state["roads"]
 
 
@@ -425,11 +424,6 @@ def cells_coverage(limit: int = 20000, min_trips: int = 3):
         [c["lat"], c["lon"], c["n_trips"], c.get("lean_p50") or 0]
         for c in rows[::step][:limit]
     ]}
-
-
-def _in_bbox(pt) -> bool:
-    s, w, n, e = _croads.BBOX
-    return s <= pt[0] <= n and w <= pt[1] <= e
 
 
 @app.post("/api/cells/route")
@@ -574,6 +568,7 @@ if os.path.isdir(WEB):
 # view of the same machinery.
 # ---------------------------------------------------------------------------
 
+from engine import cache as _cache  # noqa: E402
 from engine import fog as _fog  # noqa: E402
 from engine import replay as _replay  # noqa: E402
 from engine import rider_profile as _profile  # noqa: E402
@@ -586,9 +581,10 @@ RIDERS = {"A": "exampleUserA", "B": "exampleUserB", "C": "exampleUserC"}
 
 
 def get_scenic_index():
-    if _ride_state["index"] is None:
-        _ride_state["index"] = _scenic.ScenicIndex(get_road_graph(),
-                                                   _scenic.load_pois())
+    with lock_for("api-scenic-index"):
+        if _ride_state["index"] is None:
+            _ride_state["index"] = _scenic.ScenicIndex(get_road_graph(),
+                                                       _scenic.load_pois())
     return _ride_state["index"]
 
 
@@ -597,15 +593,24 @@ def get_profile(rider: str) -> dict:
     rider = rider.upper()
     if rider not in RIDERS:
         raise HTTPException(404, f"unknown rider {rider}; try one of {list(RIDERS)}")
-    if rider not in _ride_state["profiles"]:
-        folder = os.path.join(DATASET, RIDERS[rider], "recordedTrips")
-        if os.path.isdir(folder):
-            profile = _profile.build(folder)
-            profile.update({"demo_mode": False, "profile_source": "BMW telemetry"})
-        else:
-            profile = demo_data.sample_profile(rider)
-        _ride_state["profiles"][rider] = profile
-    return _ride_state["profiles"][rider]
+    try:
+        return ride_data.profile(rider)
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+
+
+@app.get("/api/demo/status")
+def demo_status():
+    return ride_data.status()
+
+
+@app.post("/api/ride/terrain")
+def ride_terrain(body: dict):
+    from engine import terrain
+    try:
+        return terrain.payload(body)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
 
 
 @app.get("/api/ride/profile/{rider}")
@@ -632,6 +637,7 @@ def ride_windows(rider: str = "A", days: int = 7):
                         or (4 if win.get("availability", "full") == "full" else 0))
         win["suggested_minutes"] = int(min(usable_hours * 60, 150))
     w["home"] = home
+    w["home_is_sample"] = bool(p.get("demo_mode"))
     w["rider"] = rider.upper()
     # Delivery is the one piece not built: this is the payload a push would
     # carry, not a push.
@@ -675,6 +681,12 @@ def ride_suggest(body: dict):
     if not got["routes"]:
         # Fall back to the bearing joyride rather than showing nothing -- and
         # say which one the rider is looking at.
+        #
+        # Note the fallback is seed-INVARIANT, and cannot honestly be made
+        # otherwise here: for rider A at 150 minutes exactly one loop clears
+        # the 10% overlap cap, so there is nothing to choose between. Jittering
+        # alpha was tried and changes nothing. Making this vary means either
+        # relaxing that cap or fixing the chain, not adding randomness.
         loops = _croads.joyride(g, cost, origin, minutes,
                                 alpha=float(body.get("alpha", 3.0)))
         loops = _scenic.rank_loop_fallbacks(
@@ -870,7 +882,13 @@ def ride_replay(rider: str):
         folder = os.path.join(DATASET, RIDERS[rider], "recordedTrips")
         if not os.path.isdir(folder):
             raise HTTPException(503, f"rider data not found at {folder}")
-        got = _replay.best_trip(folder)
+        # Same disk cache as the profiles: picking the best ride means parsing
+        # 40 trips, and the answer only changes when the trip files do.
+        trips = _replay.list_trips(folder)
+        got = _cache.derived_json(
+            f"replay-{rider}.json",
+            _cache.signature(trips, "replay-v1"),
+            lambda: _replay.best_trip(folder))
         if not got:
             raise HTTPException(404, "no usable recorded ride for this rider")
         _ride_state[key] = got

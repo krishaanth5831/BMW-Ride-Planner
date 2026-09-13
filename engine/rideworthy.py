@@ -18,11 +18,9 @@ gusting 60 km/h is a lovely day and a poor ride.
 from __future__ import annotations
 
 import datetime as dt
-import json
 import os
-import urllib.request
 
-from engine.net import https_context
+from engine.cache import forecast_json
 
 CACHE_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)),
                          "fixtures", "weather")
@@ -51,21 +49,10 @@ def _url(lat: float, lon: float, days: int) -> str:
 
 
 def fetch_hourly(lat: float, lon: float, days: int = 7) -> dict:
-    """Live, else the last cache, else nothing. A demo must not need wifi."""
-    os.makedirs(CACHE_DIR, exist_ok=True)
-    path = os.path.join(CACHE_DIR, f"hourly_{lat:.2f}_{lon:.2f}.json")
-    try:
-        with urllib.request.urlopen(_url(lat, lon, days), timeout=TIMEOUT_S,
-                                    context=https_context()) as r:
-            data = json.load(r)
-        with open(path, "w") as fh:
-            json.dump(data, fh)
-        return {**data, "source": "live"}
-    except Exception:
-        if os.path.exists(path):
-            with open(path) as fh:
-                return {**json.load(fh), "source": "cache"}
-        return {"source": "unavailable"}
+    """Reuse a forecast for 15 minutes; network failure uses a labeled cache."""
+    path = os.path.join(CACHE_DIR, f"hourly_{lat:.4f}_{lon:.4f}_{days}.json")
+    return forecast_json(_url(lat, lon, days), path, ttl=900,
+                         timeout=TIMEOUT_S, required="hourly")
 
 
 def _temp_score(t: float | None) -> float:
@@ -130,6 +117,7 @@ def windows(lat: float, lon: float, days: int = 7,
     out = [window for window in checked if window["confirmed"]]
     out.sort(key=lambda w: (-w["score"], w["start"]))
     return {"available": True, "source": data.get("source"), "windows": out,
+            "stale": data.get("stale", False), "cache_age_s": data.get("cache_age_s", 0),
             "checked_windows": checked, "current_hour": current_hour,
             "rule": {"hours_before_sunset": 3, "hours_after_sunset": 1,
                      "max_temp_c": MAX_RIDE_TEMP_C,

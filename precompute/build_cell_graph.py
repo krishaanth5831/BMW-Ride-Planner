@@ -18,6 +18,8 @@ Two filters are not optional (section 4):
 from __future__ import annotations
 
 import csv
+import argparse
+import datetime as dt
 import json
 import math
 import os
@@ -292,37 +294,47 @@ def collect_paths(roots: list[str], limit: int | None = None) -> list[str]:
             for f in sorted(files):
                 if f.endswith(".csv"):
                     out.append(os.path.join(dirpath, f))
-    out.sort()
+    out = sorted(set(os.path.realpath(path) for path in out))
     return out[:limit] if limit else out
 
 
 def main(argv: list[str]) -> int:
-    """Default corpus is the three example users plus 96 shards of each
-    datalake half -- 32,450 trips, ~25 minutes, a 49 MB graph. That is the
-    corpus every number in MORTON_ROUTER.md was measured on. Pass folders as
-    arguments for a smaller run.
-    """
-    base = "exd_download/datasetHackathon"
-    roots = argv[1:] or [
-        f"{base}/exampleUserA/recordedTrips",
-        f"{base}/exampleUserB/recordedTrips",
-        f"{base}/exampleUserC/recordedTrips",
-    ] + [f"{base}/anonymizedDataLake/trips-samples-{n}/{i:02d}"
-         for n in (1, 2) for i in range(96)]
-
-    roots = [r for r in roots if os.path.isdir(r)]
-    paths = collect_paths(roots)
+    """Scan the complete configured corpus once, outside the server request path."""
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("roots", nargs="*", help="Explicit trip directories (recursive)")
+    parser.add_argument("--dataset", default=os.environ.get(
+        "BMW_DATASET", "~/Desktop/BMW/exd_download/datasetHackathon"))
+    parser.add_argument("--out", default="data", help="Directory for cell_graph.json")
+    parser.add_argument("--limit", type=int, help="Explicit development-only file limit; omitted = all files")
+    args = parser.parse_args(argv[1:])
+    roots = [os.path.abspath(os.path.expanduser(r)) for r in (args.roots or [args.dataset])]
+    missing = [r for r in roots if not os.path.isdir(r)]
+    if missing:
+        parser.error("Dataset directory not found: " + ", ".join(missing))
+    if args.limit is not None and args.limit < 1:
+        parser.error("--limit must be positive")
+    paths = collect_paths(roots, args.limit)
+    if not paths:
+        parser.error("No CSV trips found. Existing graph has not been changed.")
     print(f"Ingesting {len(paths)} trip files from {len(roots)} sources...", flush=True)
 
     cells, edges, stats = ingest(paths)
     graph = finalise(cells, edges, stats)
     verify(graph)
-
-    os.makedirs("data", exist_ok=True)
-    with open("data/cell_graph.json", "w") as fh:
-        json.dump(graph, fh)
-    size = os.path.getsize("data/cell_graph.json") / 1e6
-    print(f"Wrote data/cell_graph.json ({size:.1f} MB)")
+    if not graph["cells"] or not graph["edges"]:
+        parser.error("No shared in-region road transitions survived validation; "
+                     "existing graph has not been changed.")
+    graph["source"] = {
+        "kind": "BMW CSV telemetry", "files_processed": len(paths),
+        "roots": roots, "file_limit": args.limit, "region_bbox": list(BBOX),
+        "built_at": dt.datetime.now(dt.timezone.utc).isoformat(),
+        "aggregation": "existing per-cell capped samples; all selected files scanned",
+    }
+    from engine.cache import write_json
+    output = os.path.join(args.out, "cell_graph.json")
+    write_json(output, graph)
+    size = os.path.getsize(output) / 1e6
+    print(f"Wrote {output} ({size:.1f} MB)")
     print("  stats:", json.dumps(graph["stats"], indent=None))
     return 0
 

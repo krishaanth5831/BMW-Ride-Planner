@@ -6,11 +6,9 @@ returns a neutral result rather than failing the request.
 
 from __future__ import annotations
 
-import json
 import os
-import urllib.request
 
-from engine.net import https_context
+from engine.cache import forecast_json
 
 CACHE_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "fixtures", "weather")
 TIMEOUT_S = 6
@@ -18,35 +16,23 @@ TIMEOUT_S = 6
 
 def fetch(lat: float, lon: float) -> dict:
     """Current conditions plus a risk scalar and a capability shrink factor."""
-    os.makedirs(CACHE_DIR, exist_ok=True)
-    key = f"{lat:.2f}_{lon:.2f}.json"
+    key = f"current_{lat:.4f}_{lon:.4f}.json"
     path = os.path.join(CACHE_DIR, key)
 
-    data = None
-    try:
-        url = (
-            "https://api.open-meteo.com/v1/forecast"
-            f"?latitude={lat:.4f}&longitude={lon:.4f}"
-            "&current=temperature_2m,precipitation,wind_gusts_10m,weather_code"
-        )
-        with urllib.request.urlopen(url, timeout=TIMEOUT_S,
-                                    context=https_context()) as r:
-            data = json.load(r)
-        with open(path, "w") as fh:
-            json.dump(data, fh)
-        source = "live"
-    except Exception:
-        if os.path.exists(path):
-            with open(path) as fh:
-                data = json.load(fh)
-            source = "cache"
-        else:
-            # No network and no cache: stay neutral instead of inventing weather.
-            return {
-                "available": False, "source": "unavailable",
-                "risk": 0.0, "capability_factor": 1.0,
-                "note": "weather unavailable; risk and ceilings left unmodified",
-            }
+    url = (
+        "https://api.open-meteo.com/v1/forecast"
+        f"?latitude={lat:.4f}&longitude={lon:.4f}"
+        "&current=temperature_2m,precipitation,wind_gusts_10m,weather_code"
+    )
+    data = forecast_json(url, path, ttl=300, timeout=TIMEOUT_S, required="current")
+    source = data["source"]
+    if source == "unavailable":
+        # No network and no cache: stay neutral instead of inventing weather.
+        return {
+            "available": False, "source": "unavailable",
+            "risk": 0.0, "capability_factor": 1.0,
+            "note": "weather unavailable; risk and ceilings left unmodified",
+        }
 
     cur = (data or {}).get("current", {})
     temp = cur.get("temperature_2m")
@@ -80,6 +66,7 @@ def fetch(lat: float, lon: float) -> dict:
 
     return {
         "available": True, "source": source,
+        "stale": data.get("stale", False), "cache_age_s": data.get("cache_age_s", 0),
         "temp_c": temp, "precip_mm": precip, "wind_gust_kmh": gust,
         "risk": round(risk, 3), "capability_factor": factor,
     }
