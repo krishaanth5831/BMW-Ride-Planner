@@ -1,12 +1,12 @@
-"""Zero-dependency server for the dataset-free BMW Ride Planner demo.
+"""Zero-dependency server for the BMW Ride Planner product UI.
 
 Run from the repository root:
 
     python3 -m engine.demo_server
 
-It serves the existing /ride UI and calculates routes on the committed OSM
-fixture. No FastAPI, pip packages, BMW telemetry, or generated data directory
-is required.
+It serves /ride and routes on the committed OSM fixture, using precomputed BMW
+telemetry and complete rider profiles when configured. Otherwise its sample
+values are labeled. No FastAPI or third-party packages are required.
 """
 
 from __future__ import annotations
@@ -16,6 +16,7 @@ import json
 import mimetypes
 import os
 from functools import lru_cache
+from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
 
@@ -25,29 +26,39 @@ from engine import demo
 from engine import rideworthy
 from engine import scenic
 from engine import terrain
+from engine import ride_data
+from engine.cache import lock_for
 
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 WEB = os.path.join(ROOT, "web")
 
 
-@lru_cache(maxsize=1)
 def runtime():
-    cell_graph = cells.CellGraph(demo.NEUTRAL_CELL_GRAPH)
-    road_graph = roads.load_blob(demo.NEUTRAL_CELL_GRAPH)
+    # lru_cache alone can execute the first expensive build multiple times
+    # when the POI request, warmup and route request arrive together.
+    with lock_for("demo-runtime"):
+        return _runtime()
+
+
+@lru_cache(maxsize=1)
+def _runtime():
+    blob = ride_data.crowd_blob()
+    cell_graph = cells.CellGraph(blob)
+    road_graph = roads.load_blob(blob)
     scenic_index = scenic.ScenicIndex(road_graph, scenic.load_pois())
     return cell_graph, road_graph, scenic_index
 
 
 def profile_payload(rider: str) -> dict:
-    profile = demo.sample_profile(rider)
+    profile = dict(ride_data.profile(rider))
     profile.pop("ridden_squares", None)
     profile["rider"] = rider
     return profile
 
 
 def weather_payload(rider: str) -> dict:
-    profile = demo.sample_profile(rider)
+    profile = ride_data.profile(rider)
     payload = rideworthy.windows(profile["home"]["lat"], profile["home"]["lon"],
                                   days=7)
     if not payload.get("available"):
@@ -62,6 +73,7 @@ def weather_payload(rider: str) -> dict:
         window["suggested_minutes"] = int(min(usable_hours * 60, 150))
     payload.update({
         "home": profile["home"], "rider": rider,
+        "home_is_sample": bool(profile.get("demo_mode")),
         "delivery": "in-app demo",
         "demo_mode": payload.get("source") == "bundled sample",
         "weather_provider": ("Open-Meteo" if payload.get("source") in ("live", "cache")
@@ -74,7 +86,7 @@ def suggest_payload(body: dict) -> dict:
     rider = str(body.get("rider") or "A").upper()
     if rider not in demo.SAMPLE_PROFILES:
         raise ValueError("unknown rider; use A, B, or C")
-    profile = demo.sample_profile(rider)
+    profile = ride_data.profile(rider)
     minutes = max(30.0, min(float(body.get("minutes") or 150), 360.0))
     origin_ll = body.get("origin") or [profile["home"]["lat"], profile["home"]["lon"]]
     if not (roads.BBOX[0] <= origin_ll[0] <= roads.BBOX[2]
@@ -82,7 +94,7 @@ def suggest_payload(body: dict) -> dict:
         raise ValueError("origin is outside the committed Bavaria road fixture")
 
     cell_graph, graph, index = runtime()
-    rider_model = cells.Rider(cell_graph, ridden=None,
+    rider_model = cells.Rider(cell_graph, ridden=profile.get("ridden_squares"),
                                lean_p95=profile["lean_ceiling"])
     cell_cost = cells.Cost(cell_graph, rider_model,
                            float(body.get("weather") or 0.0))
@@ -113,7 +125,8 @@ def suggest_payload(body: dict) -> dict:
         return {
             "rider": rider, "minutes": minutes, "kind": "loop",
             "origin": list(graph.node_pos(origin)),
-            "reason": planned.get("reason"), "demo_mode": True,
+            "reason": planned.get("reason"),
+            "demo_mode": bool(profile.get("demo_mode") or not cell_graph.cells),
             "routes": [{k: route[k] for k in keys if k in route} for route in loops],
         }
 
@@ -128,8 +141,9 @@ def suggest_payload(body: dict) -> dict:
         "origin_urban": round(graph.urban_of_node(origin), 2),
         "lean_ceiling": profile["lean_ceiling"],
         "bike_class": profile["bike_class"],
-        "excluded_segments": 0, "total_segments": len(graph.segments),
-        "demo_mode": True,
+        "excluded_segments": sum(cost.excluded(s) for s in graph.segments),
+        "total_segments": len(graph.segments),
+        "demo_mode": bool(profile.get("demo_mode") or not cell_graph.cells),
         "routes": [{k: route[k] for k in keys if k in route}],
     }
 
@@ -150,6 +164,7 @@ class Handler(BaseHTTPRequestHandler):
         self.send_response(status)
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(body)))
+        self.send_header("Cache-Control", "no-store")
         self.end_headers()
         self.wfile.write(body)
 
@@ -161,6 +176,7 @@ class Handler(BaseHTTPRequestHandler):
         self.send_response(200)
         self.send_header("Content-Type", mimetypes.guess_type(path)[0] or "application/octet-stream")
         self.send_header("Content-Length", str(len(body)))
+        self.send_header("Cache-Control", "no-cache")
         self.end_headers()
         self.wfile.write(body)
 
@@ -171,8 +187,7 @@ class Handler(BaseHTTPRequestHandler):
             if path in ("/", "/ride"):
                 return self.file_response(os.path.join(WEB, "ride.html"))
             if path == "/api/demo/status":
-                return self.json_response({"ok": True, "mode": "lightweight-demo",
-                                           "dataset_required": False})
+                return self.json_response(ride_data.status())
             if path == "/api/mapconfig":
                 return self.json_response(map_config())
             if path.startswith("/api/ride/profile/"):
@@ -211,11 +226,18 @@ class Handler(BaseHTTPRequestHandler):
             return self.json_response({"detail": str(exc)}, 400)
 
     def do_POST(self):
-        if urlparse(self.path).path != "/api/ride/suggest":
+        path = urlparse(self.path).path
+        if path not in ("/api/ride/suggest", "/api/ride/terrain"):
             return self.json_response({"detail": "not found"}, 404)
         try:
             length = int(self.headers.get("Content-Length", "0"))
+            if not 0 <= length <= 2_000_000:
+                raise ValueError("request is too large")
             body = json.loads(self.rfile.read(length) or b"{}")
+            if not isinstance(body, dict):
+                raise ValueError("expected a JSON object")
+            if path == "/api/ride/terrain":
+                return self.json_response(terrain.payload(body))
             return self.json_response(suggest_payload(body))
         except (ValueError, TypeError, json.JSONDecodeError) as exc:
             return self.json_response({"detail": str(exc)}, 400)
@@ -224,13 +246,32 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Run the dataset-free BMW demo")
+    parser = argparse.ArgumentParser(description="Run the BMW ride UI, using real telemetry when configured")
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8000)
+    parser.add_argument("--dataset", help="Full datasetHackathon directory")
+    parser.add_argument("--rider-a", help="Optional recordedTrips directory for rider A only")
+    parser.add_argument("--cell-graph", help="Precomputed crowd graph JSON")
+    parser.add_argument("--warmup", action="store_true", help="Prepare graphs and profiles before announcing readiness")
     args = parser.parse_args()
+    for key, value in (("BMW_DATASET", args.dataset), ("BMW_RIDER_A", args.rider_a),
+                       ("BMW_CELL_GRAPH", args.cell_graph)):
+        if value:
+            os.environ[key] = value
+    if args.warmup:
+        print("Preparing road graph and complete rider profiles (cached after the first run)...", flush=True)
+        runtime()
+        state = ride_data.status()
+        print(f"Crowd: {state['crowd_source']} ({state['crowd_cells']:,} cells)", flush=True)
+        for rider, info in state["riders"].items():
+            print(f"Rider {rider}: {info['source']}, {info['trips']} trips", flush=True)
+        print("Preparing weather forecasts (live or explicitly labeled fallback)...", flush=True)
+        with ThreadPoolExecutor(max_workers=3) as pool:
+            for rider, payload in zip(ride_data.RIDERS, pool.map(weather_payload, ride_data.RIDERS)):
+                print(f"Rider {rider} weather: {payload['source']}", flush=True)
     server = ThreadingHTTPServer((args.host, args.port), Handler)
-    print(f"Lightweight BMW demo: http://{args.host}:{args.port}/ride", flush=True)
-    print("No BMW telemetry is loaded; sample values are labeled in the UI.", flush=True)
+    print(f"BMW Ride Planner ready: http://{args.host}:{args.port}/ride", flush=True)
+    print("Data provenance: /api/demo/status (sample values remain explicitly labeled).", flush=True)
     try:
         server.serve_forever()
     except KeyboardInterrupt:

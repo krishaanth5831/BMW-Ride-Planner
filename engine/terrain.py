@@ -15,6 +15,7 @@ import urllib.request
 from functools import lru_cache
 
 from engine.net import https_context
+from engine.cache import derived_json
 
 ELEVATION_URL = "https://api.open-meteo.com/v1/elevation"
 EARTH_M = 6_371_000.0
@@ -112,13 +113,18 @@ def _fetch_elevation_batch(points: tuple[tuple[float, float], ...]) -> tuple[flo
     request = urllib.request.Request(
         f"{ELEVATION_URL}?{params}",
         headers={"User-Agent": "BMW-Ride-Planner lightweight demo"})
-    with urllib.request.urlopen(request, timeout=8,
-                                context=https_context()) as response:
-        payload = json.load(response)
-    values = payload.get("elevation") or []
-    if len(values) != len(points):
-        raise ValueError("elevation response length did not match route samples")
-    return tuple(float(value) for value in values)
+    def fetch():
+        with urllib.request.urlopen(request, timeout=8,
+                                    context=https_context()) as response:
+            payload = json.load(response)
+        values = payload.get("elevation") or []
+        if len(values) != len(points):
+            raise ValueError("elevation response length did not match route samples")
+        return [float(value) for value in values]
+
+    import hashlib
+    key = hashlib.sha256(request.full_url.encode()).hexdigest()
+    return tuple(derived_json(f"elevation/{key}.json", "copernicus-90m-v1", fetch))
 
 
 def elevation_stats(coords: list[list[float]]) -> dict:
@@ -163,3 +169,16 @@ def enrich_route(route: dict, fetch_elevation: bool = True) -> dict:
         kpis["elevation_available"] = False
         kpis["elevation_source"] = "temporarily unavailable"
     return route
+
+
+def payload(body: dict) -> dict:
+    """Optional second request: enrich a displayed route without rerouting it."""
+    coords = body.get("coords")
+    if not isinstance(coords, list) or not 2 <= len(coords) <= 20_000:
+        raise ValueError("expected 2 to 20000 route coordinates")
+    for point in coords:
+        if (not isinstance(point, (list, tuple)) or len(point) < 2
+                or not all(isinstance(x, (int, float)) and math.isfinite(x) for x in point[:2])
+                or not -90 <= point[0] <= 90 or not -180 <= point[1] <= 180):
+            raise ValueError("invalid latitude/longitude")
+    return enrich_route({"coords": coords})["kpis"]

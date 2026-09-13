@@ -127,8 +127,11 @@ class Graph:
     # ------------------------------------------------------------------
     def dijkstra(self, start: int, scorer, alpha: float, *, goal=None,
              weather: float = 0.0, weather_factor: float = 1.0,
-             max_seconds=None, avoid=None, blocked_highway_types=None):
+             max_seconds=None, avoid=None, blocked_highway_types=None,
+             penalties=None, highway_avoidance: float = 0.0,
+             twist_avoidance: float = 0.0, traffic_avoidance: float = 0.0):
         avoid = avoid or set()
+        penalties = penalties or {}
         blocked_highway_types = blocked_highway_types or set()
         dist = {start: 0.0}
         elapsed = {start: 0.0}
