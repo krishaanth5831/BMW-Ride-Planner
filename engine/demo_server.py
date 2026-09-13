@@ -24,6 +24,7 @@ from engine import cell_router as cells
 from engine import demo
 from engine import rideworthy
 from engine import scenic
+from engine import terrain
 
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -74,7 +75,7 @@ def suggest_payload(body: dict) -> dict:
     if rider not in demo.SAMPLE_PROFILES:
         raise ValueError("unknown rider; use A, B, or C")
     profile = demo.sample_profile(rider)
-    minutes = max(60.0, min(float(body.get("minutes") or 150), 360.0))
+    minutes = max(30.0, min(float(body.get("minutes") or 150), 360.0))
     origin_ll = body.get("origin") or [profile["home"]["lat"], profile["home"]["lon"]]
     if not (roads.BBOX[0] <= origin_ll[0] <= roads.BBOX[2]
             and roads.BBOX[1] <= origin_ll[1] <= roads.BBOX[3]):
@@ -85,20 +86,30 @@ def suggest_payload(body: dict) -> dict:
                                lean_p95=profile["lean_ceiling"])
     cell_cost = cells.Cost(cell_graph, rider_model,
                            float(body.get("weather") or 0.0))
-    cost = roads.RoadCost(graph, cell_cost, escape=bool(body.get("escape", True)))
+    cost = roads.RoadCost(
+        graph, cell_cost, escape=bool(body.get("escape", True)),
+        rider_style=rider, rider_speed_kmh=profile["speed_mean_kmh"])
     origin = graph.nearest_node(*origin_ll)
     planned = scenic.plan_scenic_loop(
         graph, cost, index, origin, minutes,
         alpha=float(body.get("alpha", 3.0)),
         max_stops=int(body.get("max_stops", 3)),
         south_bias=body.get("south_bias"),
+        rider_id=rider,
+        rider_profile=profile,
+        seed=body.get("seed"),
     )
 
     if not planned["routes"]:
         loops = roads.joyride(graph, cost, origin, minutes,
                               alpha=float(body.get("alpha", 3.0)))
+        loops = scenic.rank_loop_fallbacks(
+            loops, index, rider, minutes, profile, body.get("seed"))
+        if loops:
+            terrain.enrich_route(loops[0], body.get("terrain", True) is not False)
         keys = ("label", "bearing", "coords", "kpis", "roads",
-                "value_thirds", "urban_share")
+                "value_thirds", "urban_share", "overlap", "visited",
+                "personalization", "spot_search")
         return {
             "rider": rider, "minutes": minutes, "kind": "loop",
             "origin": list(graph.node_pos(origin)),
@@ -107,8 +118,10 @@ def suggest_payload(body: dict) -> dict:
         }
 
     route = planned["routes"][0]
+    terrain.enrich_route(route, body.get("terrain", True) is not False)
     keys = ("label", "coords", "kpis", "roads", "stops", "legs",
-            "visited", "value_thirds", "urban_share")
+            "visited", "value_thirds", "urban_share", "personalization",
+            "spot_search")
     return {
         "rider": rider, "minutes": minutes, "kind": "scenic-chain",
         "origin": list(graph.node_pos(origin)),
@@ -180,9 +193,19 @@ class Handler(BaseHTTPRequestHandler):
                 payload = [{"name": poi["name"], "kind": poi["kind"],
                             "lat": poi["target_lat"], "lon": poi["target_lon"],
                             "weight": poi["weight"],
-                            "location_source": poi["target_source"]}
+                            "objective_scenic": poi["objective_scenic"],
+                            "location_source": poi["target_source"],
+                            "rider_style_owner": poi["rider_style_owner"],
+                            "style_features": poi["style_features"],
+                            "rider_fit": poi["rider_fit"],
+                            "rider_rank": poi["rider_rank"]}
                            for poi in pois[:limit]]
-                return self.json_response({"total": len(pois), "pois": payload})
+                return self.json_response({
+                    "total": len(pois),
+                    "rating_scale": {"min": 1, "max": 10},
+                    "rating_basis": "bundled POI and OSM road attributes; not telemetry",
+                    "pois": payload,
+                })
             return self.json_response({"detail": "not found"}, 404)
         except (ValueError, TypeError) as exc:
             return self.json_response({"detail": str(exc)}, 400)

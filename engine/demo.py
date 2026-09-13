@@ -19,42 +19,114 @@ NEUTRAL_CELL_GRAPH = {
 
 SAMPLE_PROFILES = {
     "A": {
-        "trips": 42, "km_total": 1180, "squares_ridden": 2840,
+        "trips": 42, "km_total": 6302, "squares_ridden": 2840,
         "lean_p95": 16.7, "lean_ceiling": 19.3,
-        "speed_mean_kmh": 54.0, "rpm_mean": 3120, "rpm_per_kmh": 49.5,
-        "bike_class": "roadster", "top_gear_seen": 6,
-        "experience": "intermediate", "experience_score": 0.58,
+        "speed_mean_kmh": 54.0, "rpm_mean": 2839, "rpm_per_kmh": 52.6,
+        "bike_class": "tourer", "top_gear_seen": 6,
+        "experience": "seasoned", "experience_score": 0.72,
         "home": {"lat": 48.137, "lon": 11.576},
-        "typical_ride_min": 90, "longest_ride_min": 240,
+        "typical_ride_min": 180, "longest_ride_min": 480,
     },
     "B": {
-        "trips": 31, "km_total": 1640, "squares_ridden": 3310,
-        "lean_p95": 14.8, "lean_ceiling": 17.0,
-        "speed_mean_kmh": 59.0, "rpm_mean": 2650, "rpm_per_kmh": 38.4,
-        "bike_class": "tourer / adventure", "top_gear_seen": 6,
-        "experience": "intermediate", "experience_score": 0.52,
+        "trips": 72, "km_total": 2842, "squares_ridden": 3310,
+        "lean_p95": 22.4, "lean_ceiling": 27.2,
+        "speed_mean_kmh": 64.0, "rpm_mean": 4800, "rpm_per_kmh": 75.0,
+        "bike_class": "sport", "top_gear_seen": 6,
+        "experience": "advanced", "experience_score": 0.78,
         "home": {"lat": 48.117, "lon": 11.539},
-        "typical_ride_min": 120, "longest_ride_min": 310,
+        "typical_ride_min": 75, "longest_ride_min": 180,
     },
     "C": {
-        "trips": 67, "km_total": 2960, "squares_ridden": 5180,
+        "trips": 224, "km_total": 6799, "squares_ridden": 5180,
         "lean_p95": 21.2, "lean_ceiling": 26.5,
         "speed_mean_kmh": 66.0, "rpm_mean": 4380, "rpm_per_kmh": 66.4,
-        "bike_class": "sport", "top_gear_seen": 6,
-        "experience": "advanced", "experience_score": 0.81,
+        "bike_class": "sport tourer", "top_gear_seen": 6,
+        "experience": "expert", "experience_score": 0.93,
         "home": {"lat": 48.151, "lon": 11.558},
-        "typical_ride_min": 150, "longest_ride_min": 360,
+        "typical_ride_min": 120, "longest_ride_min": 540,
+    },
+}
+
+
+# Exactly 15 ratings per rider (45 total). These are deliberately stored apart
+# from telemetry-shaped fields: they are an interpretation of the supplied
+# aggregate descriptions, not individual sensor observations. 1 means the
+# trait is rarely expressed; 10 means it is defining for that rider.
+STYLE_RATINGS = {
+    "A": {
+        "label": "The Tourer",
+        "ratings": {
+            "Long-distance endurance": 10,
+            "Geographic exploration": 10,
+            "Trip frequency": 6,
+            "Lean commitment": 2,
+            "Extreme lean": 3,
+            "Acceleration intensity": 2,
+            "Throttle intensity": 2,
+            "Braking intensity": 3,
+            "Engine / rev intensity": 3,
+            "High-speed riding": 3,
+            "Traction-limit activity": 1,
+            "Braking control": 6,
+            "50–120 km/h fun band": 4,
+            "Technical aggression": 2,
+            "Overall experience": 8,
+        },
+    },
+    "B": {
+        "label": "The Committed Corner Rider",
+        "ratings": {
+            "Long-distance endurance": 4,
+            "Geographic exploration": 4,
+            "Trip frequency": 3,
+            "Lean commitment": 10,
+            "Extreme lean": 8,
+            "Acceleration intensity": 9,
+            "Throttle intensity": 7,
+            "Braking intensity": 6,
+            "Engine / rev intensity": 10,
+            "High-speed riding": 10,
+            "Traction-limit activity": 10,
+            "Braking control": 6,
+            "50–120 km/h fun band": 7,
+            "Technical aggression": 10,
+            "Overall experience": 7,
+        },
+    },
+    "C": {
+        "label": "The Aggressive All-Rounder",
+        "ratings": {
+            "Long-distance endurance": 10,
+            "Geographic exploration": 9,
+            "Trip frequency": 10,
+            "Lean commitment": 7,
+            "Extreme lean": 8,
+            "Acceleration intensity": 10,
+            "Throttle intensity": 10,
+            "Braking intensity": 10,
+            "Engine / rev intensity": 8,
+            "High-speed riding": 9,
+            "Traction-limit activity": 6,
+            "Braking control": 10,
+            "50–120 km/h fun band": 10,
+            "Technical aggression": 9,
+            "Overall experience": 10,
+        },
     },
 }
 
 
 def sample_profile(rider: str) -> dict:
     out = copy.deepcopy(SAMPLE_PROFILES[rider])
+    style = copy.deepcopy(STYLE_RATINGS[rider])
     out.update({
         "available": True,
         "ridden_squares": [],
         "demo_mode": True,
-        "profile_source": "bundled sample values (not telemetry)",
+        "rider_style": style["label"],
+        "style_ratings": style["ratings"],
+        "rating_scale": {"min": 1, "max": 10},
+        "profile_source": "bundled ratings from aggregate descriptions (not telemetry)",
     })
     return out
 

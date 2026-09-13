@@ -237,12 +237,25 @@ class RoadCost:
 
     def __init__(self, graph: RoadGraph, cost: Cost, escape: bool = True,
                  outer_highway_avoidance: float = 1.0,
-                 straight_avoidance: float = 1.0):
+                 straight_avoidance: float = 1.0,
+                 rider_style: str | None = None,
+                 rider_speed_kmh: float | None = None):
         self.g = graph
         self.c = cost                       # the cell Cost, reused verbatim
         self.escape = escape
         self.outer_highway_avoidance = max(0.0, outer_highway_avoidance)
         self.straight_avoidance = max(0.0, straight_avoidance)
+        self.rider_style = rider_style
+        self.rider_speed_kmh = rider_speed_kmh
+
+    def seconds(self, seg: dict) -> float:
+        """Road time adjusted to the selected rider's demonstrated pace."""
+        base = self.g.seconds(seg)
+        if not self.rider_speed_kmh:
+            return base
+        # Rider C's 66 km/h aggregate is the reference pace. The ratio keeps
+        # road-class differences while guaranteeing A is slower on the same road.
+        return base * 66.0 / max(float(self.rider_speed_kmh), 1.0)
 
     def value(self, seg: dict) -> float:
         cell = self.g.cell_of(seg)
@@ -276,10 +289,21 @@ class RoadCost:
         return alpha * (1.0 - self.g.urban_at(*seg["mid"]))
 
     def edge_cost(self, seg: dict, alpha: float) -> float:
-        t = self.g.seconds(seg)
+        t = self.seconds(seg)
         a = self.alpha_at(seg, alpha)
         base = t * (1.0 + a * (1.0 - self.value(seg)) + BETA * self.risk(seg))
-        return base * self.highway_factor(seg) * self.straight_factor(seg)
+        return (base * self.highway_factor(seg) * self.straight_factor(seg)
+                * self.rider_style_factor(seg))
+
+    def rider_style_factor(self, seg: dict) -> float:
+        """Make the Tourer actively avoid B-style sharp and fast roads."""
+        if self.rider_style != "A":
+            return 1.0
+        curve = max(0.0, float(seg.get("curvature_geo") or 0.0))
+        curve_pressure = max(0.0, min(1.0, (curve - 90.0) / 280.0))
+        road_speed = float(CLASS_SPEED.get(seg.get("highway"), 45.0))
+        speed_pressure = max(0.0, min(1.0, (road_speed - 55.0) / 45.0))
+        return 1.0 + 3.0 * curve_pressure + 0.8 * speed_pressure
 
     def highway_factor(self, seg: dict) -> float:
         """Softly avoid major roads beyond 20 km from Marienplatz."""
@@ -309,7 +333,7 @@ class RoadCost:
 
 def dijkstra(g: RoadGraph, cost: RoadCost, start: int, alpha: float, *,
              goal: int | None = None, max_seconds: float | None = None,
-             reuse: set | None = None):
+             reuse: set | None = None, reuse_multiplier: float = 4.0):
     reuse = reuse or set()
     dist = {start: 0.0}
     secs = {start: 0.0}
@@ -333,8 +357,8 @@ def dijkstra(g: RoadGraph, cost: RoadCost, start: int, alpha: float, *,
                 continue
             step = cost.edge_cost(seg, alpha)
             if sid in reuse:
-                step *= 4.0
-            ns = secs[u] + g.seconds(seg)
+                step *= max(1.0, reuse_multiplier)
+            ns = secs[u] + cost.seconds(seg)
             if max_seconds is not None and ns > max_seconds:
                 continue
             nd = d + step
@@ -385,7 +409,7 @@ def build(g: RoadGraph, cost: RoadCost, seg_ids: list[int], origin: int) -> dict
                 and haversine_m(MARIENPLATZ, tuple(seg["mid"])) / 1000.0
                     > HIGHWAY_AVOID_START_KM):
             long_straight_m += L
-        total_s += g.seconds(seg)
+        total_s += cost.seconds(seg)
         val += cost.value(seg) * L
         rsk += cost.risk(seg) * L
         cell = g.cell_of(seg)
@@ -424,6 +448,9 @@ def build(g: RoadGraph, cost: RoadCost, seg_ids: list[int], origin: int) -> dict
             "highway_km": round(highway_m / 1000.0, 1),
             "outer_highway_km": round(outer_highway_m / 1000.0, 1),
             "long_straight_km": round(long_straight_m / 1000.0, 1),
+            "average_speed_kmh": round(total_m / max(total_s, 1e-6) * 3.6, 1),
+            "rider_pace_kmh": cost.rider_speed_kmh,
+            "rider_style": cost.rider_style,
         },
         "roads": roads[:8],
     }
@@ -511,9 +538,10 @@ def joyride(g: RoadGraph, cost: RoadCost, start: int, minutes: float,
         if not out_segs:
             continue
         used = set(out_segs)
-        out_s = sum(g.seconds(g.by_id[s]) for s in out_segs)
+        out_s = sum(cost.seconds(g.by_id[s]) for s in out_segs)
         _d2, _s2, ps2, pn2 = dijkstra(g, cost, turn, alpha, goal=start,
                                       reuse=used,
+                                      reuse_multiplier=12.0,
                                       max_seconds=max(budget - out_s, 60.0) * 1.25)
         back = path_segments(ps2, pn2, turn, start)
         if not back:

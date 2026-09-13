@@ -656,26 +656,39 @@ def ride_suggest(body: dict):
                              lean_p95=p.get("lean_ceiling") or 35.0)
     weather_risk = float(body.get("weather") or 0.0)
     cost = _croads.RoadCost(g, _cells.Cost(cg, rider_obj, weather_risk),
-                            escape=bool(body.get("escape", True)))
+                            escape=bool(body.get("escape", True)),
+                            rider_style=rider,
+                            rider_speed_kmh=p.get("speed_mean_kmh"))
     origin = g.nearest_node(*origin_ll)
 
     got = _scenic.plan_scenic_loop(
         g, cost, get_scenic_index(), origin, minutes,
         alpha=float(body.get("alpha", 3.0)),
         max_stops=int(body.get("max_stops", 3)),
-        south_bias=body.get("south_bias"))
+        south_bias=body.get("south_bias"),
+        rider_id=rider if rider in _scenic.RIDER_TYPES else "A",
+        rider_profile=p,
+        seed=body.get("seed"))
 
     if not got["routes"]:
         # Fall back to the bearing joyride rather than showing nothing -- and
         # say which one the rider is looking at.
         loops = _croads.joyride(g, cost, origin, minutes,
                                 alpha=float(body.get("alpha", 3.0)))
+        loops = _scenic.rank_loop_fallbacks(
+            loops, get_scenic_index(),
+            rider if rider in _scenic.RIDER_TYPES else "A",
+            minutes, p, body.get("seed"))
+        if loops:
+            from engine import terrain as _terrain
+            _terrain.enrich_route(loops[0], body.get("terrain", True) is not False)
         return {"rider": rider, "minutes": minutes, "kind": "loop",
                 "origin": list(g.node_pos(origin)),
                 "reason": got.get("reason"),
                 "routes": [{k: r[k] for k in
                             ("label", "bearing", "coords", "kpis", "roads",
-                             "value_thirds", "urban_share")} for r in loops]}
+                             "value_thirds", "urban_share", "overlap", "visited",
+                             "personalization", "spot_search")} for r in loops]}
 
     # How much of the road network this rider's own lean ceiling removed. It is
     # the difference between Starnberger See and Tegernsee for rider A, so the
@@ -683,6 +696,8 @@ def ride_suggest(body: dict):
     excluded = sum(1 for seg in g.segments if cost.excluded(seg))
 
     r = got["routes"][0]
+    from engine import terrain as _terrain
+    _terrain.enrich_route(r, body.get("terrain", True) is not False)
     return {
         "rider": rider, "minutes": minutes, "kind": "scenic-chain",
         "origin": list(g.node_pos(origin)),
@@ -694,7 +709,8 @@ def ride_suggest(body: dict):
         "demo_mode": bool(p.get("demo_mode") or _cell_state["demo"]),
         "routes": [{k: r[k] for k in
                     ("label", "coords", "kpis", "roads", "stops", "legs",
-                     "visited", "value_thirds", "urban_share")}],
+                     "visited", "value_thirds", "urban_share",
+                     "personalization", "spot_search")}],
     }
 
 
@@ -706,7 +722,12 @@ def ride_pois(limit: int = 400):
             "pois": [{"name": p["name"], "kind": p["kind"],
                        "lat": p["target_lat"], "lon": p["target_lon"],
                        "weight": p["weight"],
-                       "location_source": p["target_source"]}
+                       "objective_scenic": p["objective_scenic"],
+                       "location_source": p["target_source"],
+                       "rider_style_owner": p["rider_style_owner"],
+                       "style_features": p["style_features"],
+                       "rider_fit": p["rider_fit"],
+                       "rider_rank": p["rider_rank"]}
                      for p in pois]}
 
 
