@@ -50,24 +50,47 @@ class CellGraph:
         self.level = blob["level"]
         self.cells: dict[str, dict] = blob["cells"]
         self.region_speed = blob.get("region_speed_kmh", 40.0)
-        # Transitions are observed directionally, but riding a road the other
-        # way is the same road. Collapse to one undirected edge per pair --
-        # mirroring without collapsing double-counts every road the crowd rode
-        # both ways, which quietly doubles the apparent branching of the graph.
+        # Edges and adjacency are built on FIRST USE, not here. The product
+        # path (/ride) needs this class only for the crowd scores and their
+        # norms: it routes on the OSM road graph and never walks these edges.
+        # Building them anyway cost every request an adjacency of 244,628
+        # mirrored dicts, about 67 MB, that nothing on that path reads.
+        self._raw_edges = blob["edges"]
+        self._edges = None
+        self._adj = None
+        self._norm = self._feature_norms()
+        self.p95_brake = self._p95("abs_rate")
+        self.p95_decel = self._p95("decel_rate")
+
+    def _build_edges(self) -> None:
+        """Transitions are observed directionally, but riding a road the other
+        way is the same road. Collapse to one undirected edge per pair --
+        mirroring without collapsing double-counts every road the crowd rode
+        both ways, which quietly doubles the apparent branching of the graph.
+        """
         merged: dict[tuple, dict] = {}
-        for e in blob["edges"]:
+        for e in self._raw_edges:
             key = (e["a"], e["b"]) if e["a"] < e["b"] else (e["b"], e["a"])
             cur = merged.get(key)
             if cur is None or e["n_trips"] > cur["n_trips"]:
                 merged[key] = e
-        self.edges = list(merged.values())
-        self.adj: dict[str, list[dict]] = defaultdict(list)
-        for e in self.edges:
-            self.adj[e["a"]].append(e)
-            self.adj[e["b"]].append({**e, "a": e["b"], "b": e["a"]})
-        self._norm = self._feature_norms()
-        self.p95_brake = self._p95("abs_rate")
-        self.p95_decel = self._p95("decel_rate")
+        self._edges = list(merged.values())
+        self._adj = defaultdict(list)
+        for e in self._edges:
+            self._adj[e["a"]].append(e)
+            self._adj[e["b"]].append({**e, "a": e["b"], "b": e["a"]})
+
+    @property
+    def edges(self) -> list:
+        if self._edges is None:
+            self._build_edges()
+        return self._edges
+
+    @property
+    def adj(self) -> dict:
+        if self._adj is None:
+            self._build_edges()
+        return self._adj
 
     def branching(self) -> float:
         """Share of squares with a genuine choice of onward road."""
