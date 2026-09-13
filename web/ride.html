@@ -33,22 +33,25 @@
 * { box-sizing: border-box; }
 html, body { height: 100%; }
 body {
-  margin: 0; background: var(--ground); color: var(--ink);
+  margin: 0; background: #070a0e; color: var(--ink);
   font-family: var(--sans); font-size: 14px; line-height: 1.55;
   -webkit-font-smoothing: antialiased;
-  display: grid; grid-template-columns: 430px 1fr; height: 100dvh;
+  display: grid; grid-template-columns: minmax(390px, 430px) 1fr; height: 100dvh;
 }
 .num { font-family: var(--mono); font-variant-numeric: tabular-nums; }
 
 /* ---- panel ---- */
-#panel { overflow-y: auto; border-right: 1px solid var(--line); background: var(--surface); }
+#panel { overflow-y: auto; border-right: 1px solid rgba(255,255,255,.07);
+  background: linear-gradient(180deg, #151a20 0%, #101419 58%, #0d1116 100%);
+  box-shadow: 18px 0 50px rgba(0,0,0,.22); z-index: 20; }
 #panel::-webkit-scrollbar { width: 9px; }
 #panel::-webkit-scrollbar-thumb { background: var(--line); border-radius: 99px; }
 
 header {
   display: flex; align-items: center; gap: 12px;
   padding: 18px 22px; border-bottom: 1px solid var(--line);
-  position: sticky; top: 0; background: var(--surface); z-index: 5;
+  position: sticky; top: 0; background: rgba(18,22,27,.88); z-index: 5;
+  backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px);
 }
 .mark {
   width: 26px; height: 26px; border-radius: 50%; flex: none;
@@ -80,6 +83,23 @@ h2 { font-size: 17px; font-weight: 600; margin: 0 0 3px; letter-spacing: -.01em;
 .alert .when { font-size: 21px; font-weight: 700; letter-spacing: -.02em; line-height: 1.2; }
 .alert .cond { color: var(--ink-dim); font-size: 13px; margin-top: 5px; }
 .alert .cond b { color: var(--ink); font-weight: 500; }
+.hour-dash {
+  display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px;
+  border: 1px solid var(--line); background: var(--line); overflow: hidden;
+  border-radius: var(--r-card); margin-bottom: 14px;
+}
+.hour-head { grid-column: 1 / -1; display: flex; justify-content: space-between;
+  align-items: baseline; padding: 11px 13px; background: var(--raised); }
+.hour-head span:first-child { color: var(--ink-dim); font-size: 11px;
+  text-transform: uppercase; letter-spacing: .1em; }
+.hour-cell { background: var(--surface); padding: 11px 12px; }
+.hour-cell b { display: block; font-family: var(--mono); font-size: 15px;
+  font-weight: 500; white-space: nowrap; }
+.hour-cell span { color: var(--ink-faint); font-size: 9.5px;
+  text-transform: uppercase; letter-spacing: .06em; }
+.hour-foot { grid-column: 1 / -1; display: flex; justify-content: space-between;
+  padding: 9px 12px; background: var(--surface); color: var(--ink-dim);
+  font-size: 11px; }
 
 button, .btn {
   font-family: var(--sans); font-size: 14px; font-weight: 600;
@@ -87,7 +107,8 @@ button, .btn {
   padding: 11px 16px; cursor: pointer; width: 100%;
   transition: transform .12s cubic-bezier(.16,1,.3,1), background .16s, border-color .16s;
 }
-.primary { background: var(--accent); color: var(--accent-ink); margin-top: 15px; }
+.primary { background: linear-gradient(135deg, #36afea, var(--accent)); color: var(--accent-ink);
+  margin-top: 15px; box-shadow: 0 8px 24px rgba(46,155,214,.2); }
 .primary:hover { background: #3badE8; }
 .primary:active { transform: translateY(1px); }
 .primary:disabled { opacity: .45; cursor: default; transform: none; }
@@ -105,9 +126,25 @@ button, .btn {
   padding: 11px 13px; border: 1px solid var(--line); border-radius: var(--r-ctl);
   background: transparent; text-align: left; cursor: pointer; width: 100%;
   font-family: var(--sans); font-weight: 500;
+  color: var(--ink);
 }
 .win:hover { border-color: #37404c; background: var(--raised); }
 .win[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); }
+.win.partial { border-color: rgba(224,168,54,.38); }
+.win.partial[aria-pressed="true"] { background: rgba(224,168,54,.10); }
+.win.bad { border-color: rgba(224,104,90,.38); }
+.win.bad[aria-pressed="true"] { background: rgba(224,104,90,.10); }
+.win.partial .bars i.on { background: var(--warm); }
+.win.bad .bars i.on { background: var(--bad); }
+.win-status { display: block; font-size: 11px; margin-top: 2px; color: var(--ink-dim); }
+.win.partial .win-status { color: var(--warm); }
+.win.bad .win-status { color: var(--bad); }
+.alert.partial { border-color: rgba(224,168,54,.45);
+  background: linear-gradient(160deg, rgba(224,168,54,.10), transparent 70%), var(--raised); }
+.alert.partial .kicker { color: var(--warm); }
+.alert.bad { border-color: rgba(224,104,90,.48);
+  background: linear-gradient(160deg, rgba(224,104,90,.10), transparent 70%), var(--raised); }
+.alert.bad .kicker { color: var(--bad); }
 .win .d { font-size: 13.5px; }
 .win .c { color: var(--ink-faint); font-size: 12px; }
 .bars { display: flex; gap: 2px; align-items: flex-end; height: 18px; }
@@ -146,6 +183,9 @@ button, .btn {
 .thirds div { height: 5px; border-radius: 3px; background: var(--line); }
 .thirds div.best { background: var(--accent); }
 .legend { font-size: 11.5px; color: var(--ink-faint); margin-top: 7px; }
+.sample-mark { color: var(--warm); font-family: var(--mono); margin-left: 2px; }
+.sample-note { color: var(--ink-faint); font-size: 11px; line-height: 1.45;
+               margin-top: 12px; }
 
 /* ---- profile ---- */
 .prof { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 18px; }
@@ -166,15 +206,112 @@ button, .btn {
 .msg.bad { color: var(--bad); }
 .stack { display: grid; gap: 9px; }
 
-/* ---- map ---- */
-#map { height: 100dvh; background: var(--ground); }
+/* ---- navigation map ---- */
+#mapStage {
+  min-width: 0; height: 100dvh; position: relative; overflow: hidden;
+  isolation: isolate; perspective: 1200px;
+  background:
+    radial-gradient(circle at 50% 42%, rgba(46,155,214,.18), transparent 38%),
+    linear-gradient(165deg, #14212b 0%, #071016 58%, #05080c 100%);
+}
+#mapStage::before {
+  content: ''; position: absolute; inset: 0; z-index: 4; pointer-events: none;
+  background: linear-gradient(180deg, rgba(4,8,12,.58) 0%, transparent 22%,
+    transparent 68%, rgba(3,7,10,.72) 100%);
+}
+#mapSurface {
+  position: absolute; inset: -3.5% -2.5% -6%; overflow: hidden;
+  border-radius: 4% 4% 13% 13% / 3% 3% 8% 8%;
+  transform: rotateX(7deg) scale(1.035); transform-origin: 50% 76%;
+  box-shadow: 0 35px 90px rgba(0,0,0,.52), inset 0 0 0 1px rgba(255,255,255,.08);
+  transition: transform .8s cubic-bezier(.16,1,.3,1), filter .8s ease;
+}
+#mapStage.navigating #mapSurface { transform: rotateX(8.5deg) scale(1.05); }
+#mapSurface::after {
+  content: ''; position: absolute; inset: 0; z-index: 500; pointer-events: none;
+  border-radius: inherit;
+  box-shadow: inset 0 75px 80px -70px rgba(4,8,12,.9),
+    inset 0 -90px 100px -70px rgba(4,8,12,.9),
+    inset 35px 0 60px -55px rgba(4,8,12,.7),
+    inset -35px 0 60px -55px rgba(4,8,12,.7);
+}
+#map { width: 100%; height: 100%; background: var(--ground); }
 .leaflet-container { font-family: var(--sans); background: var(--ground); }
 .leaflet-popup-content-wrapper, .leaflet-popup-tip {
   background: var(--raised); color: var(--ink); border: 1px solid var(--line);
 }
 .leaflet-popup-content { margin: 10px 13px; font-size: 13px; }
-.leaflet-bar a { background: var(--raised); color: var(--ink); border-color: var(--line); }
-.leaflet-bar a:hover { background: var(--surface); }
+.leaflet-bar { border: 0 !important; box-shadow: 0 9px 28px rgba(0,0,0,.3) !important; }
+.leaflet-bar a { background: rgba(18,24,30,.9); color: var(--ink); border-color: rgba(255,255,255,.08); }
+.leaflet-bar a:hover { background: #202932; }
+.leaflet-control-attribution { background: rgba(8,12,16,.72) !important; color: #b6c0c9 !important;
+  border-radius: 8px 0 0 0; backdrop-filter: blur(8px); }
+.leaflet-control-attribution a { color: #78c9f2 !important; }
+.leaflet-top.leaflet-left { top: 84px; left: 14px; }
+.route-glow { filter: drop-shadow(0 0 8px rgba(46,155,214,.85)); }
+
+.map-hud { position: absolute; z-index: 600; pointer-events: none; }
+.nav-card {
+  top: 24px; left: 24px; min-width: 250px; max-width: min(360px, 45vw);
+  padding: 13px 16px 14px; border: 1px solid rgba(255,255,255,.11);
+  border-radius: 16px; color: var(--ink);
+  background: linear-gradient(145deg, rgba(24,34,43,.9), rgba(10,15,20,.82));
+  box-shadow: 0 16px 42px rgba(0,0,0,.34); backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+}
+.nav-card .eyebrow { display: flex; align-items: center; gap: 7px; color: #71c9f5;
+  font-size: 10px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; }
+.nav-card .eyebrow::before { content: ''; width: 7px; height: 7px; border-radius: 50%;
+  background: #48c5f4; box-shadow: 0 0 0 5px rgba(72,197,244,.12), 0 0 15px #48c5f4; }
+.nav-card strong { display: block; margin-top: 6px; font-size: 18px; line-height: 1.2;
+  letter-spacing: -.02em; }
+.nav-card small { color: #9eabb7; font-size: 12px; }
+.map-chip {
+  top: 24px; right: 24px; padding: 10px 13px; display: flex; align-items: center; gap: 8px;
+  border: 1px solid rgba(255,255,255,.1); border-radius: 999px;
+  background: rgba(10,16,21,.78); color: #cbd4dc; font-size: 11px;
+  letter-spacing: .04em; backdrop-filter: blur(14px); box-shadow: 0 12px 34px rgba(0,0,0,.25);
+}
+.map-chip svg { color: #65c6ef; }
+.compass { right: 24px; bottom: 32px; width: 42px; height: 42px; display: grid;
+  place-items: center; border: 1px solid rgba(255,255,255,.1); border-radius: 50%;
+  background: rgba(10,16,21,.78); color: #d8e0e7; font: 600 11px var(--mono);
+  box-shadow: 0 12px 34px rgba(0,0,0,.3); backdrop-filter: blur(14px); }
+.compass::before { content: ''; position: absolute; top: 6px; border-left: 4px solid transparent;
+  border-right: 4px solid transparent; border-bottom: 8px solid var(--accent); }
+
+.moto-focus {
+  position: absolute; z-index: 650; left: 50%; top: 50%; width: 76px; height: 104px;
+  transform: translate(-50%, -50%) rotate(var(--heading, 0deg)) scale(.74);
+  transform-origin: 50% 50%; pointer-events: none; display: grid; place-items: center;
+  opacity: 0; filter: drop-shadow(0 13px 15px rgba(0,0,0,.62));
+  transition: opacity .35s ease, transform .18s linear;
+}
+.navigating .moto-focus { opacity: 1;
+  transform: translate(-50%, -50%) rotate(var(--heading, 0deg)) scale(1); }
+.moto-focus::before {
+  content: ''; position: absolute; left: 50%; top: 50%; width: 76px; height: 76px;
+  transform: translate(-50%, -50%); border-radius: 50%;
+  background: radial-gradient(circle, rgba(46,155,214,.18) 0 20%, transparent 62%);
+  border: 1px solid rgba(95,205,255,.18); animation: navPulse 2.8s ease-out infinite;
+}
+.heading-cone {
+  position: absolute; width: 54px; height: 90px; top: -37px;
+  clip-path: polygon(50% 0, 100% 100%, 0 100%);
+  background: linear-gradient(180deg, rgba(68,189,240,.20), transparent 82%);
+}
+.moto-rig {
+  position: relative; width: 56px; height: 88px; display: grid; place-items: center;
+  transform: perspective(180px) rotateX(25deg); transform-style: preserve-3d;
+  animation: motoFloat 1.4s ease-in-out infinite;
+}
+.moto-rig svg { width: 52px; height: 84px; overflow: visible;
+  filter: drop-shadow(0 9px 5px rgba(0,0,0,.55)); }
+@keyframes navPulse { 0% { transform: scale(.7); opacity: .8; } 75%,100% { transform: scale(1.3); opacity: 0; } }
+@keyframes motoFloat {
+  0%,100% { transform: perspective(180px) rotateX(25deg) translateY(0) rotateZ(-1deg); }
+  50% { transform: perspective(180px) rotateX(25deg) translateY(-2px) rotateZ(1deg); }
+}
 .stop-marker {
   display: grid; place-items: center; font-family: var(--mono); font-size: 11px;
   font-weight: 500; width: 24px; height: 24px; border-radius: 50%;
@@ -187,9 +324,17 @@ button, .btn {
 }
 
 @media (max-width: 900px) {
-  body { grid-template-columns: 1fr; grid-template-rows: auto 45dvh; height: auto; }
+  body { grid-template-columns: 1fr; grid-template-rows: auto 52dvh; height: auto; }
   #panel { border-right: 0; border-bottom: 1px solid var(--line); }
-  #map { height: 45dvh; }
+  #mapStage { height: 52dvh; min-height: 390px; }
+  #mapSurface { inset: -2% -3% -5%; transform: rotateX(4deg) scale(1.03); }
+  #mapStage.navigating #mapSurface { transform: rotateX(5deg) scale(1.04); }
+  .nav-card { top: 14px; left: 14px; min-width: 220px; max-width: calc(100% - 92px); }
+  .map-chip { top: 14px; right: 14px; width: 43px; height: 43px; padding: 0;
+    justify-content: center; font-size: 0; }
+  .leaflet-top.leaflet-left { top: 76px; left: 5px; }
+  .navigating .moto-focus { transform: translate(-50%, -50%) rotate(var(--heading, 0deg)) scale(.86); }
+  .compass { right: 14px; bottom: 24px; }
 }
 @media (prefers-reduced-motion: reduce) {
   * { animation: none !important; transition: none !important; }
@@ -208,9 +353,10 @@ button, .btn {
   </header>
 
   <section id="weatherSec">
-    <h2>Next good weather</h2>
-    <p class="sub">Read from the forecast at your home location, scored for riding
-      rather than for sunbathing.</p>
+    <h2>Next sundown ride</h2>
+    <p class="sub">Each day is checked from three hours before sunset until one
+      hour after. A window is confirmed only when riding weather is good and
+      every hour stays at or below 30&deg;C.</p>
     <div id="weather" class="stack">
       <div class="skel tall"></div><div class="skel" style="width:60%"></div>
     </div>
@@ -225,12 +371,50 @@ button, .btn {
 
   <section id="profSec">
     <h2>What your bike says about you</h2>
-    <p class="sub">Every figure below is measured from your own recorded rides.
+    <p class="sub" id="profSub">Every figure below is measured from your own recorded rides.
       Nothing was asked for and nothing is assumed.</p>
     <div id="prof" class="stack"><div class="skel"></div><div class="skel"></div></div>
   </section>
 </div>
-<div id="map"></div>
+<main id="mapStage" aria-label="Interactive scenic route map">
+  <div id="mapSurface"><div id="map"></div></div>
+  <div class="map-hud nav-card">
+    <div class="eyebrow">Scenic navigation</div>
+    <strong id="mapMode">Ready for the road</strong>
+    <small id="mapStatus">Choose a weather window to build your ride</small>
+  </div>
+  <div class="map-hud map-chip" title="Live map and riding conditions">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M4 15.5a4.5 4.5 0 0 1 2.6-4.08A6 6 0 0 1 18 9.5a3.5 3.5 0 1 1 .5 6.96H6.1" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+    </svg>
+    Live conditions
+  </div>
+  <div class="moto-focus" id="motoFocus" aria-hidden="true">
+    <div class="heading-cone"></div>
+    <div class="moto-rig">
+      <svg viewBox="0 0 52 84" fill="none">
+        <defs>
+          <linearGradient id="bikePaint" x1="16" y1="18" x2="37" y2="67" gradientUnits="userSpaceOnUse">
+            <stop stop-color="#70D5FF"/><stop offset=".5" stop-color="#168BC8"/><stop offset="1" stop-color="#07547E"/>
+          </linearGradient>
+          <linearGradient id="bikeMetal" x1="12" y1="20" x2="40" y2="60" gradientUnits="userSpaceOnUse">
+            <stop stop-color="#F8FCFF"/><stop offset=".55" stop-color="#A9BAC5"/><stop offset="1" stop-color="#536470"/>
+          </linearGradient>
+        </defs>
+        <ellipse cx="26" cy="75" rx="16" ry="5" fill="#02070A" fill-opacity=".58"/>
+        <rect x="21" y="2" width="10" height="22" rx="5" fill="#071016" stroke="#DDEAF0" stroke-width="2"/>
+        <rect x="20" y="60" width="12" height="23" rx="6" fill="#071016" stroke="#DDEAF0" stroke-width="2"/>
+        <path d="M11 26h30M15 22l7 7m15-7-7 7" stroke="url(#bikeMetal)" stroke-width="3.5" stroke-linecap="round"/>
+        <path d="M26 18v48M17 33l9 18 9-18M16 61l10-10 10 10" stroke="url(#bikeMetal)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M26 25c-7 0-11 6-11 15 0 5 2 9 5 12l-3 13h18l-3-13c3-3 5-7 5-12 0-9-4-15-11-15Z" fill="url(#bikePaint)" stroke="#EAF8FF" stroke-width="2"/>
+        <path d="M20 31c1-4 3-6 6-6s5 2 6 6l-3 6h-6l-3-6Z" fill="#10232D" stroke="#8DDBFA" stroke-width="1.5"/>
+        <path d="M20 49h12l3 16H17l3-16Z" fill="#0B6594"/>
+        <circle cx="13" cy="27" r="3" fill="#EAF8FF"/><circle cx="39" cy="27" r="3" fill="#EAF8FF"/>
+      </svg>
+    </div>
+  </div>
+  <div class="map-hud compass" aria-hidden="true">N</div>
+</main>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
@@ -238,7 +422,7 @@ const $ = id => document.getElementById(id);
 const ACCENT = '#2e9bd6';
 
 /* ---------------------------------------------------------------- map ---- */
-const map = L.map('map', { zoomControl: true, attributionControl: true })
+const map = L.map('map', { zoomControl: true, attributionControl: true, zoomSnap: .25 })
   .setView([47.95, 11.45], 10);
 const layers = {
   poi: L.layerGroup().addTo(map),
@@ -246,6 +430,59 @@ const layers = {
   stops: L.layerGroup().addTo(map),
 };
 let layerDefs = [], layerIdx = 0, base = null;
+let routePreviewFrame = 0;
+let routePreviewTimer = 0;
+
+function stopRoutePreview() {
+  if (routePreviewFrame) cancelAnimationFrame(routePreviewFrame);
+  if (routePreviewTimer) clearTimeout(routePreviewTimer);
+  routePreviewFrame = 0;
+  routePreviewTimer = 0;
+}
+
+function routeBearing(a, b) {
+  const rad = Math.PI / 180;
+  const lat1 = a.lat * rad, lat2 = b.lat * rad;
+  const dLon = (b.lng - a.lng) * rad;
+  const y = Math.sin(dLon) * Math.cos(lat2);
+  const x = Math.cos(lat1) * Math.sin(lat2) -
+    Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLon);
+  return (Math.atan2(y, x) / rad + 360) % 360;
+}
+
+function previewRoute(coords) {
+  stopRoutePreview();
+  const pts = (coords || []).map(p => L.latLng(p[0], p[1]));
+  if (pts.length < 2) return;
+
+  const cumulative = [0];
+  for (let i = 1; i < pts.length; i++)
+    cumulative.push(cumulative[i - 1] + pts[i - 1].distanceTo(pts[i]));
+  const total = cumulative[cumulative.length - 1];
+  if (!total) return;
+
+  const duration = Math.max(24000, Math.min(52000, total / 3.5));
+  let started = null, segment = 1;
+  map.setView(pts[0], Math.max(10.75, map.getZoom()), { animate: true });
+
+  const frame = now => {
+    if (started === null) started = now;
+    const travelled = ((now - started) % duration) / duration * total;
+    if (travelled < cumulative[segment - 1]) segment = 1;
+    while (segment < cumulative.length - 1 && cumulative[segment] < travelled) segment++;
+    const from = pts[segment - 1], to = pts[segment];
+    const length = cumulative[segment] - cumulative[segment - 1] || 1;
+    const part = (travelled - cumulative[segment - 1]) / length;
+    const here = L.latLng(
+      from.lat + (to.lat - from.lat) * part,
+      from.lng + (to.lng - from.lng) * part
+    );
+    $('motoFocus').style.setProperty('--heading', `${routeBearing(from, to)}deg`);
+    map.panTo(here, { animate: false, noMoveStart: true });
+    routePreviewFrame = requestAnimationFrame(frame);
+  };
+  routePreviewFrame = requestAnimationFrame(frame);
+}
 
 function useLayer(i) {
   if (i >= layerDefs.length) return;
@@ -282,7 +519,7 @@ async function api(url, body) {
   }
   useLayer(0);
   try {
-    const p = await api('/api/ride/pois?limit=320');
+    const p = await api('/api/ride/pois?limit=1000');
     for (const poi of p.pois) {
       const r = poi.kind === 'lake' ? 5 : 3.2;
       L.circleMarker([poi.lat, poi.lon], {
@@ -302,26 +539,34 @@ async function loadProfile(rider) {
   try {
     profile = await api('/api/ride/profile/' + rider);
     const p = profile;
+    $('profSub').textContent = p.demo_mode
+      ? 'Dataset-free mode: these are clearly labeled sample riders; no private telemetry is loaded.'
+      : 'Every figure below is measured from your own recorded rides.';
+    const measured = !p.demo_mode;
+    const mark = p.demo_mode ? '<sup class="sample-mark">*</sup>' : '';
     $('prof').className = 'prof';
     $('prof').innerHTML = `
-      <div><span>Bike</span><b>${p.bike_class}</b>
-        <div class="legend">${p.rpm_per_kmh} rpm per km/h, inferred</div></div>
-      <div><span>Experience</span><b>${p.experience}</b>
-        <div class="legend">${p.trips} rides, ${p.km_total.toLocaleString()} km</div></div>
-      <div><span>Lean used</span><b class="num">${p.lean_p95}&deg;</b>
-        <div class="legend">95th percentile while moving</div></div>
-      <div><span>Safety ceiling</span><b class="num">${p.lean_ceiling}&deg;</b>
+      <div><span>Bike</span><b>${p.bike_class}${mark}</b>
+        <div class="legend">${p.rpm_per_kmh}${mark} rpm per km/h, ${measured ? 'inferred' : 'sample'}</div></div>
+      <div><span>Experience</span><b>${p.experience}${mark}</b>
+        <div class="legend">${p.trips}${mark} ${measured ? 'rides' : 'sample rides'}, ${p.km_total.toLocaleString()}${mark} km</div></div>
+      <div><span>Lean used</span><b class="num">${p.lean_p95}&deg;${mark}</b>
+        <div class="legend">${measured ? '95th percentile while moving' : 'sample rider setting'}</div></div>
+      <div><span>Safety ceiling</span><b class="num">${p.lean_ceiling}&deg;${mark}</b>
         <div class="legend">Roads beyond this leave your map</div></div>
-      <div><span>Typical ride</span><b class="num">${p.typical_ride_min} min</b></div>
-      <div><span>Ground covered</span><b class="num">${p.squares_ridden.toLocaleString()}</b>
-        <div class="legend">100 m squares ridden</div></div>`;
+      <div><span>Typical ride</span><b class="num">${p.typical_ride_min}${mark} min</b></div>
+      <div><span>Ground covered</span><b class="num">${p.squares_ridden.toLocaleString()}${mark}</b>
+        <div class="legend">100 m squares ridden</div></div>
+      ${p.demo_mode ? `<div class="sample-note" style="grid-column:1/-1">
+        <span class="sample-mark">*</span> Bundled demonstration value—not sourced
+        from an API or telemetry dataset.</div>` : ''}`;
   } catch (e) {
     $('prof').innerHTML = `<div class="msg bad">${e.message}</div>`;
   }
 }
 
 /* ------------------------------------------------ weather notification ---- */
-let windows = [], chosen = 0;
+let windows = [], chosen = 0, weatherIsSample = false, weatherSource = '', latestHour = null;
 
 function bars(score) {
   const n = Math.round(score * 5);
@@ -334,10 +579,16 @@ async function loadWeather(rider) {
   $('weather').innerHTML = '<div class="skel tall"></div><div class="skel" style="width:60%"></div>';
   try {
     const w = await api('/api/ride/windows?rider=' + rider);
+    weatherIsSample = Boolean(w.demo_mode);
+    weatherSource = w.weather_provider || w.source || '';
+    latestHour = w.current_hour || null;
     windows = w.windows || [];
     if (!windows.length) {
-      $('weather').innerHTML = `<div class="msg">No rideable window in the next
-        7 days. Nothing would be sent.</div>`;
+      $('weather').innerHTML = `${hourDashboard()}<div class="msg">No sundown
+        window in the next 7 days passes both the weather and 30&deg;C checks.</div>
+        ${weatherSource === 'Open-Meteo' ? `<div class="sample-note">
+          Live forecast by <a href="https://open-meteo.com/" target="_blank"
+          rel="noopener">Open-Meteo</a>.</div>` : ''}`;
       return;
     }
     render();
@@ -345,46 +596,104 @@ async function loadWeather(rider) {
     L.marker([w.home.lat, w.home.lon], {
       icon: L.divIcon({ className: '', html: '<div class="home-marker"></div>',
                         iconSize: [15, 15], iconAnchor: [7, 7] })
-    }).addTo(layers.stops).bindPopup('Home');
+    }).addTo(layers.stops).bindPopup(profile && profile.demo_mode
+      ? 'Home* · sample location' : 'Home');
   } catch (e) {
     $('weather').innerHTML = `<div class="msg bad">${e.message}</div>`;
   }
 }
 
+function weatherLabel(code) {
+  if (code == null) return 'Weather';
+  if (code === 0) return 'Clear';
+  if (code <= 3) return 'Cloud cover';
+  if (code <= 48) return 'Fog';
+  if (code <= 67) return 'Rain';
+  if (code <= 77) return 'Snow';
+  if (code <= 82) return 'Showers';
+  return 'Storm';
+}
+
+function hourDashboard() {
+  if (!latestHour) return '';
+  const h = latestHour;
+  const mark = weatherIsSample ? '<sup class="sample-mark">*</sup>' : '';
+  const time = new Date(h.time).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+  return `<div class="hour-dash">
+    <div class="hour-head"><span>Latest full hour · ${weatherLabel(h.weather_code)}</span>
+      <b class="num">${time}${mark}</b></div>
+    <div class="hour-cell"><b>${h.temp_c}&deg;${mark}</b><span>Temperature</span></div>
+    <div class="hour-cell"><b>${h.rain_pct}%${mark}</b><span>Rain chance</span></div>
+    <div class="hour-cell"><b>${h.precip_mm} mm${mark}</b><span>Precipitation</span></div>
+    <div class="hour-cell"><b>${h.gust_kmh} km/h${mark}</b><span>Wind gusts</span></div>
+    <div class="hour-foot"><span>Motorcycle ride score · ${h.ride_condition}</span>
+      <b class="num">${Math.round(h.ride_score * 100)}%${mark}</b></div>
+  </div>`;
+}
+
 function render() {
   const w = windows[chosen];
-  const [s, e] = [new Date(w.start), new Date(w.end)];
+  const demo = weatherIsSample;
+  const mark = demo ? '<sup class="sample-mark">*</sup>' : '';
+  const availability = w.availability || (w.confirmed ? 'full' : 'none');
+  const usable = availability === 'partial' ? w.best_period : null;
+  const [fullStart, fullEnd] = [new Date(w.start), new Date(w.end)];
+  const [s, e] = usable
+    ? [new Date(usable.start), new Date(usable.end)]
+    : [fullStart, fullEnd];
   const hhmm = d => d.toTimeString().slice(0, 5);
   const today = new Date().toDateString();
   const tom = new Date(Date.now() + 864e5).toDateString();
   const day = s.toDateString() === today ? 'Today'
             : s.toDateString() === tom ? 'Tomorrow' : w.day;
+  const statusText = availability === 'full'
+    ? 'All four hours passed'
+    : availability === 'partial'
+      ? `Only ${w.best_period.hours} consecutive hour${w.best_period.hours === 1 ? '' : 's'} passed`
+      : `Cannot ride: ${w.rejection_reason || 'weather failed the riding check'}`;
+  const kicker = availability === 'full'
+    ? (demo ? 'Sample sundown window' : 'Sundown ride confirmed')
+    : availability === 'partial' ? 'Shorter riding window only' : 'Ride not recommended';
   $('weather').className = '';
   $('weather').innerHTML = `
-    <div class="alert">
-      <div class="kicker">Good riding weather</div>
-      <div class="when">${day}, ${hhmm(s)} to ${hhmm(e)}</div>
-      <div class="cond"><b class="num">${w.temp_c}&deg;C</b> &middot;
-        <b class="num">${w.rain_pct}%</b> chance of rain &middot;
-        gusts <b class="num">${w.gust_kmh}</b> km/h</div>
-      <label class="legend" for="mins" style="display:block;margin-top:14px">
+    ${hourDashboard()}
+    <div class="alert ${availability === 'partial' ? 'partial' : availability === 'none' ? 'bad' : ''}">
+      <div class="kicker">${kicker}</div>
+      <div class="when">${day}, ${hhmm(s)} to ${hhmm(e)}${mark}</div>
+      <div class="cond"><b class="num">${w.temp_c}&deg;C${mark}</b> &middot;
+        <b class="num">${w.rain_pct}%${mark}</b> chance of rain &middot;
+        gusts <b class="num">${w.gust_kmh}${mark}</b> km/h</div>
+      <div class="legend">Sunset ${hhmm(new Date(w.sunset))} · hottest hour
+        <b class="num">${w.max_temp_c}&deg;C${mark}</b> · ${statusText}</div>
+      ${availability !== 'none' ? `<label class="legend" for="mins" style="display:block;margin-top:14px">
         How long have you got?</label>
-      <input type="range" id="mins" min="60" max="300" step="30"
+      <input type="range" id="mins" min="60" max="${Math.max(60, Math.min(300, (w.best_period ? w.best_period.hours : 4) * 60))}" step="30"
              value="${w.suggested_minutes}" style="width:100%;accent-color:var(--accent)">
-      <button class="primary" id="plan">Plan a <span id="minsV" class="num">${w.suggested_minutes}</span> minute ride</button>
+      <button class="primary" id="plan">Plan a <span id="minsV" class="num">${w.suggested_minutes}</span> minute ride</button>`
+      : `<button class="primary" disabled>No safe riding period in this window</button>`}
     </div>
-    <div class="wins" id="wins"></div>`;
+    <div class="wins" id="wins"></div>
+    ${demo ? `<div class="sample-note"><span class="sample-mark">*</span>
+      Bundled demonstration value—not sourced from a weather API.</div>`
+      : `<div class="sample-note">Live forecast by
+        <a href="https://open-meteo.com/" target="_blank" rel="noopener">Open-Meteo</a>.
+        The marked home location still belongs to the sample rider.</div>`}`;
   $('wins').innerHTML = windows.slice(0, 5).map((x, i) => {
     const d = new Date(x.start);
-    return `<button class="win" data-i="${i}" aria-pressed="${i === chosen}">
-      <span><span class="d">${x.day}, ${hhmm(d)}</span>
-      <span class="c"> ${x.hours}h at ${x.temp_c}&deg;C</span></span>
-      ${bars(x.score)}</button>`;
+    const state = x.availability || (x.confirmed ? 'full' : 'none');
+    const label = state === 'full' ? 'Full 4-hour window'
+      : state === 'partial' ? `${x.best_period.hours} hour${x.best_period.hours === 1 ? '' : 's'} only`
+      : `Cannot ride · ${x.rejection_reason || 'poor conditions'}`;
+    return `<button class="win ${state === 'none' ? 'bad' : state}" data-i="${i}" aria-pressed="${i === chosen}">
+      <span><span class="d">${x.day}, ${hhmm(d)}${mark}</span>
+      <span class="c"> ${x.hours}h${mark} at ${x.temp_c}&deg;C${mark}</span>
+      <span class="win-status">${label}</span></span>
+      ${bars(x.score)}${mark}</button>`;
   }).join('');
   for (const b of $('wins').querySelectorAll('.win'))
     b.onclick = () => { chosen = +b.dataset.i; render(); };
-  $('mins').oninput = ev => { $('minsV').textContent = ev.target.value; };
-  $('plan').onclick = plan;
+  if ($('mins')) $('mins').oninput = ev => { $('minsV').textContent = ev.target.value; };
+  if ($('plan')) $('plan').onclick = plan;
 }
 
 /* --------------------------------------------------------------- ride ---- */
@@ -418,14 +727,19 @@ function drawRide(d) {
   if (!r) {
     $('ride').className = 'msg';
     $('ride').textContent = d.reason || 'No ride fitted that window.';
+    $('mapStage').classList.remove('navigating');
+    $('mapMode').textContent = 'No route found';
+    $('mapStatus').textContent = 'Try a longer riding window';
+    stopRoutePreview();
     return;
   }
-  L.polyline(r.coords, { color: '#05080b', weight: 8, opacity: .55 }).addTo(layers.route);
-  L.polyline(r.coords, { color: ACCENT, weight: 4, opacity: .95 }).addTo(layers.route);
+  L.polyline(r.coords, { color: '#05080b', weight: 10, opacity: .62 }).addTo(layers.route);
+  L.polyline(r.coords, { color: ACCENT, weight: 4.5, opacity: 1,
+    className: 'route-glow', lineCap: 'round', lineJoin: 'round' }).addTo(layers.route);
 
   L.marker(d.origin, { icon: L.divIcon({ className: '',
       html: '<div class="home-marker"></div>', iconSize: [15, 15], iconAnchor: [7, 7] })
-  }).addTo(layers.stops).bindPopup('Home');
+  }).addTo(layers.stops).bindPopup(d.demo_mode ? 'Home* · sample location' : 'Home');
 
   (r.stops || []).forEach((s, i) => {
     L.marker([s.lat, s.lon], { icon: L.divIcon({ className: '',
@@ -436,6 +750,10 @@ function drawRide(d) {
   map.fitBounds(L.polyline(r.coords).getBounds(), { padding: [50, 50] });
 
   const k = r.kpis;
+  $('mapStage').classList.add('navigating');
+  $('mapMode').textContent = r.label;
+  $('mapStatus').textContent = `${k.km} km · ${Math.round(k.minutes)} min · following the route`;
+  routePreviewTimer = setTimeout(() => previewRoute(r.coords), 650);
   const legs = r.legs || [];
   const stopRows = (r.stops || []).map((s, i) => `
     <div class="stop"><div class="pin">${i + 1}</div>
@@ -446,7 +764,8 @@ function drawRide(d) {
   const bestIdx = t.length ? t.indexOf(Math.max(...t)) : -1;
 
   $('rideSub').textContent = d.kind === 'scenic-chain'
-    ? 'Out of town first, then the part you came for, then home.'
+    ? (d.demo_mode ? 'Dataset-free route on real OSM roads with neutral crowd scoring.'
+                   : 'Out of town first, then the part you came for, then home.')
     : 'No scenic chain fitted this budget, so here is the best loop instead.';
   $('ride').className = '';
   $('ride').innerHTML = `
@@ -474,6 +793,12 @@ function drawRide(d) {
       Passes ${r.visited.length} mapped scenic points, closest
       ${r.visited.slice(0, 3).map(v => v.name).join(', ')}.</div>` : ''}
     ${r.roads && r.roads.length ? `<div class="legend">Via ${r.roads.slice(0, 4).join(', ')}.</div>` : ''}
+    ${k.outer_highway_km !== undefined ? `<div class="legend">
+      Major highway beyond Munich: <b class="num">${k.outer_highway_km} km</b>.
+      Motorways are strongly avoided after 20 km, but remain available when needed.</div>` : ''}
+    ${k.long_straight_km !== undefined ? `<div class="legend">
+      Long straight road beyond Munich: <b class="num">${k.long_straight_km} km</b>.
+      Extended straight runs are penalized; short connectors remain available.</div>` : ''}
     ${d.excluded_segments ? `<div class="legend" style="margin-top:10px">
       <b class="num">${d.excluded_segments.toLocaleString()}</b> roads were left out
       because the crowd rides them harder than your ${d.lean_ceiling}&deg; lean
@@ -482,7 +807,11 @@ function drawRide(d) {
 
 /* --------------------------------------------------------------- init ---- */
 async function load(rider) {
+  stopRoutePreview();
   layers.route.clearLayers(); layers.stops.clearLayers();
+  $('mapStage').classList.remove('navigating');
+  $('mapMode').textContent = 'Ready for the road';
+  $('mapStatus').textContent = 'Choose a weather window to build your ride';
   $('ride').className = 'msg'; $('ride').textContent = 'Nothing planned yet.';
   chosen = 0;
   await loadProfile(rider);

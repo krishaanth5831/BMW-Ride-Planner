@@ -13,6 +13,7 @@ they own.
 | [DATA_SOURCES.md](DATA_SOURCES.md) | The six external sources — OSM, Copernicus DEM, CLMS land cover, Open-Meteo, live traffic, government accident data — what each contributes, what it costs, and the build priority |
 | [STACK.md](STACK.md) | Tech stack, repo layout, API surface, the shared `Track` shape, demo hardening |
 | [UI.md](UI.md) | The dashboard — seven views, rider switching, scope tiers |
+| [RIDER_ARCHETYPES.md](RIDER_ARCHETYPES.md) | Future idea backlog for commuter, touring, adventure, sport, cruiser, urban, off-road, heritage, track, and group rider types |
 
 ---
 

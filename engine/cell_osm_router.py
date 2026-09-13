@@ -30,8 +30,8 @@ import os
 from collections import defaultdict
 
 from engine.cell_router import BETA, Cost
-from precompute.build_osm_graph import (build_index, haversine_m, subdivide,
-                                        ways_to_segments)
+from precompute.build_osm_graph import (build_index, geometric_curviness,
+                                        haversine_m, subdivide, ways_to_segments)
 from precompute.morton import LEVEL_NODE, morton_code
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -42,6 +42,22 @@ FIXTURES = os.path.join(ROOT, "fixtures", "osm")
 # refused rather than silently triggering an unbounded live Overpass fetch on
 # somebody's click path.
 BBOX = (47.60, 11.15, 48.25, 11.80)
+
+# Keep the quick city escape, then strongly prefer riding roads once clear of
+# Munich. The penalty ramps in over 5 km so Dijkstra does not chase a sharp
+# artificial boundary at exactly 20 km.
+MARIENPLATZ = (48.137154, 11.576124)
+HIGHWAY_AVOID_START_KM = 20.0
+HIGHWAY_AVOID_FULL_KM = 25.0
+OUTER_HIGHWAY_COST = {
+    "motorway": 6.0, "motorway_link": 5.0,
+    "trunk": 4.0, "trunk_link": 3.0,
+    "primary": 1.45, "primary_link": 1.25,
+}
+STRAIGHT_RUN_START_KM = 0.7
+STRAIGHT_RUN_FULL_KM = 3.0
+STRAIGHT_CURVE_FULL_DEG_PER_KM = 70.0
+STRAIGHT_MAX_EXTRA_COST = 3.0
 
 # ~2 km at this latitude. Big enough that one quiet street does not read as
 # countryside, small enough that a town does not smear across a valley.
@@ -57,6 +73,7 @@ class RoadGraph:
 
     def __init__(self, segments: list[dict], cells: CellLookup):
         self.segments = segments
+        self._annotate_road_runs()
         self.by_id = {s["seg_id"]: s for s in segments}
         self.cells = cells
         self.adj: dict[int, list[int]] = defaultdict(list)
@@ -72,6 +89,18 @@ class RoadGraph:
             self._pos.setdefault(s["node_b"], (g[-1][0], g[-1][1]))
         self._main = self._main_component()
         self._urban = self._urbanness()
+
+    def _annotate_road_runs(self) -> None:
+        """Attach the total named-road length to each ~100 m chunk."""
+        totals = defaultdict(float)
+        keys = []
+        for seg in self.segments:
+            key = (("name", seg["name"], seg.get("highway")) if seg.get("name")
+                   else ("way", seg.get("way_id")))
+            keys.append(key)
+            totals[key] += float(seg.get("length_m") or 0.0)
+        for seg, key in zip(self.segments, keys):
+            seg["road_run_km"] = totals[key] / 1000.0
 
     def _main_component(self) -> set[int]:
         """The biggest connected piece of the network.
@@ -206,10 +235,14 @@ CLASS_SPEED = {
 class RoadCost:
     """The identical distortion, reading its terms from the square below."""
 
-    def __init__(self, graph: RoadGraph, cost: Cost, escape: bool = True):
+    def __init__(self, graph: RoadGraph, cost: Cost, escape: bool = True,
+                 outer_highway_avoidance: float = 1.0,
+                 straight_avoidance: float = 1.0):
         self.g = graph
         self.c = cost                       # the cell Cost, reused verbatim
         self.escape = escape
+        self.outer_highway_avoidance = max(0.0, outer_highway_avoidance)
+        self.straight_avoidance = max(0.0, straight_avoidance)
 
     def value(self, seg: dict) -> float:
         cell = self.g.cell_of(seg)
@@ -245,7 +278,33 @@ class RoadCost:
     def edge_cost(self, seg: dict, alpha: float) -> float:
         t = self.g.seconds(seg)
         a = self.alpha_at(seg, alpha)
-        return t * (1.0 + a * (1.0 - self.value(seg)) + BETA * self.risk(seg))
+        base = t * (1.0 + a * (1.0 - self.value(seg)) + BETA * self.risk(seg))
+        return base * self.highway_factor(seg) * self.straight_factor(seg)
+
+    def highway_factor(self, seg: dict) -> float:
+        """Softly avoid major roads beyond 20 km from Marienplatz."""
+        target = OUTER_HIGHWAY_COST.get(seg.get("highway"), 1.0)
+        if target == 1.0 or self.outer_highway_avoidance == 0.0:
+            return 1.0
+        distance_km = haversine_m(MARIENPLATZ, tuple(seg["mid"])) / 1000.0
+        ramp = max(0.0, min(1.0, (distance_km - HIGHWAY_AVOID_START_KM)
+                                / (HIGHWAY_AVOID_FULL_KM - HIGHWAY_AVOID_START_KM)))
+        return 1.0 + ramp * self.outer_highway_avoidance * (target - 1.0)
+
+    def straight_factor(self, seg: dict) -> float:
+        """Penalise long, locally straight roads outside the Munich radius."""
+        if self.straight_avoidance == 0.0:
+            return 1.0
+        distance_km = haversine_m(MARIENPLATZ, tuple(seg["mid"])) / 1000.0
+        city_ramp = max(0.0, min(1.0, (distance_km - HIGHWAY_AVOID_START_KM)
+                                     / (HIGHWAY_AVOID_FULL_KM - HIGHWAY_AVOID_START_KM)))
+        run_km = float(seg.get("road_run_km") or 0.0)
+        run_pressure = max(0.0, min(1.0, (run_km - STRAIGHT_RUN_START_KM)
+                                        / (STRAIGHT_RUN_FULL_KM - STRAIGHT_RUN_START_KM)))
+        curve = max(0.0, float(seg.get("curvature_geo") or 0.0))
+        straightness = 1.0 - min(1.0, curve / STRAIGHT_CURVE_FULL_DEG_PER_KM)
+        return 1.0 + (city_ramp * run_pressure * straightness
+                      * self.straight_avoidance * STRAIGHT_MAX_EXTRA_COST)
 
 
 def dijkstra(g: RoadGraph, cost: RoadCost, start: int, alpha: float, *,
@@ -306,7 +365,7 @@ def build(g: RoadGraph, cost: RoadCost, seg_ids: list[int], origin: int) -> dict
     val = rsk = lean = 0.0
     elev: list[float] = []
     names: list[str] = []
-    on_crowd_m = 0.0
+    on_crowd_m = highway_m = outer_highway_m = long_straight_m = 0.0
     for sid in seg_ids:
         seg = g.by_id[sid]
         geom = seg["geometry"]
@@ -317,6 +376,15 @@ def build(g: RoadGraph, cost: RoadCost, seg_ids: list[int], origin: int) -> dict
         coords.extend([[p[0], p[1]] for p in geom])
         L = float(seg["length_m"])
         total_m += L
+        if seg.get("highway") in ("motorway", "motorway_link", "trunk", "trunk_link"):
+            highway_m += L
+            if haversine_m(MARIENPLATZ, tuple(seg["mid"])) / 1000.0 > HIGHWAY_AVOID_START_KM:
+                outer_highway_m += L
+        if (float(seg.get("road_run_km") or 0.0) >= STRAIGHT_RUN_START_KM
+                and float(seg.get("curvature_geo") or 0.0) < 25.0
+                and haversine_m(MARIENPLATZ, tuple(seg["mid"])) / 1000.0
+                    > HIGHWAY_AVOID_START_KM):
+            long_straight_m += L
         total_s += g.seconds(seg)
         val += cost.value(seg) * L
         rsk += cost.risk(seg) * L
@@ -353,6 +421,9 @@ def build(g: RoadGraph, cost: RoadCost, seg_ids: list[int], origin: int) -> dict
             "mean_lean_deg": round(lean / max(on_crowd_m, 1e-6), 1),
             "elev_gain_m": round(gain, 0),
             "crowd_covered_pct": round(100 * on_crowd_m / den, 0),
+            "highway_km": round(highway_m / 1000.0, 1),
+            "outer_highway_km": round(outer_highway_m / 1000.0, 1),
+            "long_straight_km": round(long_straight_m / 1000.0, 1),
         },
         "roads": roads[:8],
     }
@@ -490,12 +561,24 @@ def load_ways(bbox=BBOX) -> list[dict]:
     return list(ways.values())
 
 
-def load(cell_graph_path: str) -> RoadGraph:
-    with open(cell_graph_path) as fh:
-        cells = CellLookup(json.load(fh))
-    segments = subdivide(ways_to_segments(load_ways()))
+def load_blob(blob: dict) -> RoadGraph:
+    """Build the road graph from an in-memory crowd layer.
+
+    A neutral layer is useful for the lightweight demo: OSM supplies real road
+    geometry while missing telemetry follows the existing neutral fallbacks.
+    """
+    cells = CellLookup(blob)
+    base_segments = ways_to_segments(load_ways())
+    for segment in base_segments:
+        segment["curvature_geo"] = geometric_curviness(segment["geometry"])
+    segments = subdivide(base_segments)
     for s in segments:
         pts = s["geometry"]
         mid = pts[len(pts) // 2]
         s["mid"] = (float(mid[0]), float(mid[1]))
     return RoadGraph(segments, cells)
+
+
+def load(cell_graph_path: str) -> RoadGraph:
+    with open(cell_graph_path) as fh:
+        return load_blob(json.load(fh))

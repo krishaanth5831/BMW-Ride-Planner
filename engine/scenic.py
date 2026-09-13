@@ -44,6 +44,7 @@ SOUTH_SECTOR = (140.0, 235.0)
 # A POI is "visited" if the route passes this close. Riding past the far shore
 # of a lake still counts as riding to the lake.
 VISIT_M = 700.0
+LAKE_VIEWPOINT_MAX_M = 8_000.0
 
 
 def load_pois(path: str | None = None) -> list[dict]:
@@ -74,17 +75,57 @@ class ScenicIndex:
     def __init__(self, graph: RoadGraph, pois: list[dict]):
         self.g = graph
         self.pois = []
+        viewpoints = [p for p in pois if p.get("kind") == "viewpoint"]
         for p in pois:
-            node = graph.nearest_node(p["lat"], p["lon"])
+            target = p
+            target_source = "lake road access" if p.get("kind") == "lake" else "poi"
+            if p.get("kind") == "lake" and viewpoints:
+                nearby = sorted(
+                    viewpoints,
+                    key=lambda v: haversine_m((p["lat"], p["lon"]),
+                                              (v["lat"], v["lon"])),
+                )
+                for candidate in nearby:
+                    if haversine_m((p["lat"], p["lon"]),
+                                   (candidate["lat"], candidate["lon"])) > LAKE_VIEWPOINT_MAX_M:
+                        break
+                    candidate_node = graph.nearest_node(candidate["lat"],
+                                                        candidate["lon"])
+                    if candidate_node is not None:
+                        candidate_pos = graph.node_pos(candidate_node)
+                        if haversine_m((candidate["lat"], candidate["lon"]),
+                                       candidate_pos) <= VISIT_M:
+                            target = candidate
+                            target_source = "nearby viewpoint"
+                            break
+
+            node = graph.nearest_node(target["lat"], target["lon"])
             if node is None:
                 continue
             pos = graph.node_pos(node)
             # A POI whose nearest road is kilometres away is a summit you would
             # have to walk to. Keep it only if a road actually goes near it.
-            if haversine_m((p["lat"], p["lon"]), pos) > 2_500:
+            if haversine_m((target["lat"], target["lon"]), pos) > 2_500:
                 continue
+            # The source coordinate describes the attraction, not necessarily
+            # a place where a motorcycle can stand. Every public POI and route
+            # stop is therefore displayed at the exact OSM road node used by
+            # the router. This keeps lake centroids, hilltops and viewpoints
+            # from floating beside the road while preserving their source
+            # coordinate for provenance.
+            display_lat, display_lon = pos
+            snap_distance_m = round(haversine_m(
+                (target["lat"], target["lon"]), pos))
             self.pois.append({**p, "node": node, "road_lat": pos[0],
-                              "road_lon": pos[1]})
+                              "road_lon": pos[1],
+                              "target_name": target["name"],
+                              "target_kind": target["kind"],
+                              "target_lat": display_lat,
+                              "target_lon": display_lon,
+                              "source_lat": target["lat"],
+                              "source_lon": target["lon"],
+                              "snap_distance_m": snap_distance_m,
+                              "target_source": target_source + " · OSM road"})
 
     def visited_by(self, coords: list[list[float]], within_m: float = VISIT_M):
         """Which POIs the finished route actually passes. The honest check."""
@@ -95,10 +136,17 @@ class ScenicIndex:
         pts = coords[::3] or coords
         out = []
         for p in self.pois:
-            best = min(haversine_m((p["lat"], p["lon"]), (c[0], c[1])) for c in pts)
+            best = min(haversine_m((p["target_lat"], p["target_lon"]),
+                                   (c[0], c[1])) for c in pts)
             if best <= within_m:
-                out.append({**{k: p[k] for k in ("name", "kind", "lat", "lon",
-                                                 "weight")},
+                out.append({"name": p["name"], "kind": p["kind"],
+                            "lat": p["target_lat"], "lon": p["target_lon"],
+                            "weight": p["weight"],
+                            "target_name": p["target_name"],
+                            "target_kind": p["target_kind"],
+                            "target_lat": p["target_lat"],
+                            "target_lon": p["target_lon"],
+                            "target_source": p["target_source"],
                             "distance_m": round(best)})
         out.sort(key=lambda q: -q["weight"])
         return out
@@ -233,8 +281,13 @@ def _ride(g, cost, index, origin, ordered, alpha, budget, max_stops):
         return None
 
     route.update(_thirds(g, cost, segs))
-    route["stops"] = [{"name": s["name"], "kind": s["kind"], "lat": s["lat"],
-                       "lon": s["lon"]} for s in ordered]
+    route["stops"] = [{"name": s["name"], "kind": s["kind"],
+                       "lat": s["target_lat"], "lon": s["target_lon"],
+                       "target_name": s["target_name"],
+                       "target_kind": s["target_kind"],
+                       "target_lat": s["target_lat"],
+                       "target_lon": s["target_lon"],
+                       "target_source": s["target_source"]} for s in ordered]
     route["legs"] = legs
     route["visited"] = index.visited_by(route["coords"])
     route["label"] = " \u00b7 ".join(s["name"] for s in ordered)

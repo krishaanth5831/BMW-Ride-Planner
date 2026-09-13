@@ -15,7 +15,10 @@ import math
 import os
 from collections import Counter, defaultdict
 
-import duckdb
+try:
+    import duckdb
+except ImportError:  # The lightweight /ride demo uses bundled sample profiles.
+    duckdb = None
 
 from precompute.build_osm_graph import (ABS_ENGAGED, GRID, LEAN_STEP_NOISE,
                                         LEAN_STRAIGHT, build_index, snap)
@@ -76,6 +79,8 @@ def _q(con, sql: str, params=None):
 
 def summarise_trips(paths: list[str]) -> dict:
     """Per-trip and per-cell rollups of an uploaded rider's CSVs."""
+    if duckdb is None:
+        raise RuntimeError("duckdb is required to profile uploaded telemetry")
     con = duckdb.connect()
     con.execute("PRAGMA memory_limit='2GB'")
     files = "[" + ",".join("'" + p.replace("'", "''") + "'" for p in paths) + "]"
