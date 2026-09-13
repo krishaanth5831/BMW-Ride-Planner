@@ -66,7 +66,36 @@ built. Both are marked (\*).
 ## Quick start
 
 ```bash
-pip install duckdb fastapi uvicorn numpy pyarrow python-multipart
+# macOS, Linux, and Windows: no dataset, pip install, or precomputation needed.
+python3 -m engine.demo_server
+```
+
+Open <http://localhost:8000/ride>. The lightweight mode routes on the committed
+OSM fixture, uses clearly labeled sample rider values, and fetches live weather.
+If a valid
+`data/cell_graph.json` and BMW example-rider folders are present, the same app
+automatically switches to telemetry-backed mode.
+
+Weather windows come from the live Open-Meteo forecast API (no key required)
+and are cached locally. If the service or network is unavailable, the UI falls
+back to clearly marked bundled sample weather so the demo remains usable.
+Each day is evaluated only from three hours before local sunset until one hour
+after. A ride is confirmed when every hourly weather score passes and no hour
+exceeds 30°C.
+
+Scenic routes use major roads to leave Munich efficiently, then ramp in a
+strong motorway/trunk penalty from 20–25 km away from Marienplatz. The roads
+remain available when they are the only practical connection.
+Long, locally straight named roads receive an additional geometry-based cost
+outside the same radius; short connectors and genuinely curving roads do not.
+
+### Full telemetry-backed setup
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate                 # macOS / Linux
+python -m pip install -r requirements.txt
+python -m pip install duckdb
 
 # 1. Fetch the road network from Overpass (~5 min, cached to fixtures/osm/).
 python -m precompute.fetch_osm

@@ -26,7 +26,10 @@ import os
 import time
 from collections import defaultdict
 
-import duckdb
+try:
+    import duckdb
+except ImportError:  # Dataset-free demo only needs the OSM helper functions.
+    duckdb = None
 
 from .fetch_osm import DEFAULT_BBOX
 from .morton import LEVEL_NODE
@@ -336,6 +339,8 @@ def snap(point, heading, segments, idx):
 
 # ------------------------------------------------------------- 3. crowd stats
 def crowd_cells(bbox, shards: str) -> list[dict]:
+    if duckdb is None:
+        raise RuntimeError("duckdb is required to build graphs from BMW telemetry")
     south, west, north, east = bbox
     pattern = f"{DATASET}/anonymizedDataLake/{shards}/*.csv"
     con = duckdb.connect()

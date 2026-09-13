@@ -10,12 +10,15 @@ Two surfaces, same engine.
 ## Before the room
 
 ```bash
-pip install fastapi uvicorn python-multipart
-python3 precompute/build_cell_graph.py        # ~25 min, writes data/cell_graph.json (49 MB)
-python3 -m uvicorn engine.api:app --port 8000
+python3 -m engine.demo_server
 ```
 
-`data/` is gitignored, so the crowd graph has to be built once on any new
+That starts a lightweight, dataset-free version using real cached OSM roads and
+clearly labeled sample profiles. It has no third-party Python dependencies. For
+the telemetry-backed room demo, install `requirements.txt` plus `duckdb`, build
+`data/cell_graph.json`, and run the FastAPI app with uvicorn.
+
+`data/` is gitignored, so the real crowd graph has to be built once on any new
 machine. Everything else (road tiles, scenic points) is cached in `fixtures/`
 and needs no network. The forecast is live but falls back to its own cache, so
 the demo survives a dead wifi.

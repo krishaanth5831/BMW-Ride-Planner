@@ -1,0 +1,6 @@
+fastapi
+python-multipart
+uvicorn
+
+# Optional: only needed for uploaded/private BMW telemetry and precomputation.
+# duckdb
