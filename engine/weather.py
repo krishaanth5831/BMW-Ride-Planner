@@ -10,6 +10,8 @@ import json
 import os
 import urllib.request
 
+from engine.net import https_context
+
 CACHE_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "fixtures", "weather")
 TIMEOUT_S = 6
 
@@ -27,7 +29,8 @@ def fetch(lat: float, lon: float) -> dict:
             f"?latitude={lat:.4f}&longitude={lon:.4f}"
             "&current=temperature_2m,precipitation,wind_gusts_10m,weather_code"
         )
-        with urllib.request.urlopen(url, timeout=TIMEOUT_S) as r:
+        with urllib.request.urlopen(url, timeout=TIMEOUT_S,
+                                    context=https_context()) as r:
             data = json.load(r)
         with open(path, "w") as fh:
             json.dump(data, fh)

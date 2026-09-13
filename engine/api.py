@@ -18,6 +18,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from engine import weather as weather_mod
+from engine import demo as demo_data
 from engine.profile import build_profile
 from engine.router import Graph, plan_alternatives, plan_heatmap, plan_loop
 from engine.scoring import Scorer
@@ -362,31 +363,36 @@ if os.path.isdir(WEB):
 from engine import cell_osm_router as _croads  # noqa: E402
 from engine import cell_router as _cells  # noqa: E402
 
-_cell_state: dict = {"graph": None, "roads": None}
+_cell_state: dict = {"graph": None, "roads": None, "blob": None, "demo": None}
+
+
+def _cell_blob() -> dict:
+    """Use real generated telemetry when present, else the neutral demo layer."""
+    if _cell_state["blob"] is None:
+        path = os.path.join(DATA, "cell_graph.json")
+        blob = None
+        try:
+            with open(path) as fh:
+                candidate = json.load(fh)
+            if candidate.get("cells") and candidate.get("edges"):
+                blob = candidate
+        except (OSError, ValueError, TypeError):
+            pass
+        _cell_state["demo"] = blob is None
+        _cell_state["blob"] = blob or demo_data.NEUTRAL_CELL_GRAPH
+    return _cell_state["blob"]
 
 
 def get_cell_graph():
     if _cell_state["graph"] is None:
-        path = os.path.join(DATA, "cell_graph.json")
-        if not os.path.exists(path):
-            raise HTTPException(
-                503,
-                "No crowd graph yet. Run:  python3 precompute/build_cell_graph.py",
-            )
-        _cell_state["graph"] = _cells.load(path)
+        _cell_state["graph"] = _cells.CellGraph(_cell_blob())
     return _cell_state["graph"]
 
 
 def get_road_graph():
     """OSM geometry with morton-cell costs. Built once; ~3 s and ~66k segments."""
     if _cell_state["roads"] is None:
-        path = os.path.join(DATA, "cell_graph.json")
-        if not os.path.exists(path):
-            raise HTTPException(
-                503,
-                "No crowd graph yet. Run:  python3 precompute/build_cell_graph.py",
-            )
-        _cell_state["roads"] = _croads.load(path)
+        _cell_state["roads"] = _croads.load_blob(_cell_blob())
     return _cell_state["roads"]
 
 
@@ -404,6 +410,7 @@ def cells_health():
         "transitions": len(g.edges),
         "branching_pct": round(100 * g.branching(), 1),
         "region_speed_kmh": g.region_speed,
+        "mode": "lightweight-demo" if _cell_state["demo"] else "telemetry",
     }
 
 
@@ -549,13 +556,9 @@ def mapconfig():
              "url": "https://maps.geoapify.com/v1/tile/dark-matter/{z}/{x}/{y}.png?apiKey=" + geoapify,
              "attribution": "&copy; Geoapify &copy; OpenMapTiles &copy; OpenStreetMap",
              "dark": True})
-    layers += [
-        {"id": "carto", "name": "Dark (CARTO)",
-         "url": "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
-         "attribution": "&copy; OpenStreetMap &copy; CARTO", "dark": True},
+    layers.append(
         {"id": "osm", "name": "OSM", "url": "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
-         "attribution": "&copy; OpenStreetMap contributors", "dark": False},
-    ]
+         "attribution": "&copy; OpenStreetMap contributors", "dark": False})
     return {"layers": layers, "default": layers[0]["id"]}
 
 
@@ -594,9 +597,12 @@ def get_profile(rider: str) -> dict:
         raise HTTPException(404, f"unknown rider {rider}; try one of {list(RIDERS)}")
     if rider not in _ride_state["profiles"]:
         folder = os.path.join(DATASET, RIDERS[rider], "recordedTrips")
-        if not os.path.isdir(folder):
-            raise HTTPException(503, f"rider data not found at {folder}")
-        _ride_state["profiles"][rider] = _profile.build(folder)
+        if os.path.isdir(folder):
+            profile = _profile.build(folder)
+            profile.update({"demo_mode": False, "profile_source": "BMW telemetry"})
+        else:
+            profile = demo_data.sample_profile(rider)
+        _ride_state["profiles"][rider] = profile
     return _ride_state["profiles"][rider]
 
 
@@ -610,26 +616,27 @@ def ride_profile(rider: str):
 
 @app.get("/api/ride/windows")
 def ride_windows(rider: str = "A", days: int = 7):
-    """The notification. Every rideable stretch in the forecast, best first."""
+    """Today plus four daily sundown checks, including rejected days."""
     p = get_profile(rider)
     home = p.get("home") or {"lat": 48.137, "lon": 11.576}
     w = _weather.windows(home["lat"], home["lon"], days=days)
+    if not w.get("available"):
+        w = demo_data.sample_weather()
+        w["fallback_reason"] = "Open-Meteo was unavailable"
+    w["windows"] = (w.get("checked_windows") or w["windows"])[:5]
     for win in w["windows"]:
         win["headline"] = _weather.headline(win)
-        # What the rider actually has time for: their own typical ride, unless
-        # the good weather is shorter than that.
-        # Long enough to actually get somewhere. A rider whose commute is
-        # 39 minutes still needs about two and a half hours to reach the lakes
-        # from Munich and get back, so the floor is what the geography costs,
-        # not what their weekday riding looks like.
-        typical = p.get("typical_ride_min") or 90
-        win["suggested_minutes"] = int(min(win["ride_minutes"],
-                                           max(150, typical * 3)))
+        usable_hours = ((win.get("best_period") or {}).get("hours")
+                        or (4 if win.get("availability", "full") == "full" else 0))
+        win["suggested_minutes"] = int(min(usable_hours * 60, 150))
     w["home"] = home
     w["rider"] = rider.upper()
     # Delivery is the one piece not built: this is the payload a push would
     # carry, not a push.
     w["delivery"] = "in-app (no push channel wired)"
+    w["demo_mode"] = w.get("source") == "bundled sample"
+    w["weather_provider"] = ("Open-Meteo" if w.get("source") in ("live", "cache")
+                             else "bundled sample")
     return w
 
 
@@ -649,26 +656,39 @@ def ride_suggest(body: dict):
                              lean_p95=p.get("lean_ceiling") or 35.0)
     weather_risk = float(body.get("weather") or 0.0)
     cost = _croads.RoadCost(g, _cells.Cost(cg, rider_obj, weather_risk),
-                            escape=bool(body.get("escape", True)))
+                            escape=bool(body.get("escape", True)),
+                            rider_style=rider,
+                            rider_speed_kmh=p.get("speed_mean_kmh"))
     origin = g.nearest_node(*origin_ll)
 
     got = _scenic.plan_scenic_loop(
         g, cost, get_scenic_index(), origin, minutes,
         alpha=float(body.get("alpha", 3.0)),
         max_stops=int(body.get("max_stops", 3)),
-        south_bias=body.get("south_bias"))
+        south_bias=body.get("south_bias"),
+        rider_id=rider if rider in _scenic.RIDER_TYPES else "A",
+        rider_profile=p,
+        seed=body.get("seed"))
 
     if not got["routes"]:
         # Fall back to the bearing joyride rather than showing nothing -- and
         # say which one the rider is looking at.
         loops = _croads.joyride(g, cost, origin, minutes,
                                 alpha=float(body.get("alpha", 3.0)))
+        loops = _scenic.rank_loop_fallbacks(
+            loops, get_scenic_index(),
+            rider if rider in _scenic.RIDER_TYPES else "A",
+            minutes, p, body.get("seed"))
+        if loops:
+            from engine import terrain as _terrain
+            _terrain.enrich_route(loops[0], body.get("terrain", True) is not False)
         return {"rider": rider, "minutes": minutes, "kind": "loop",
                 "origin": list(g.node_pos(origin)),
                 "reason": got.get("reason"),
                 "routes": [{k: r[k] for k in
                             ("label", "bearing", "coords", "kpis", "roads",
-                             "value_thirds", "urban_share")} for r in loops]}
+                             "value_thirds", "urban_share", "overlap", "visited",
+                             "personalization", "spot_search")} for r in loops]}
 
     # How much of the road network this rider's own lean ceiling removed. It is
     # the difference between Starnberger See and Tegernsee for rider A, so the
@@ -676,6 +696,8 @@ def ride_suggest(body: dict):
     excluded = sum(1 for seg in g.segments if cost.excluded(seg))
 
     r = got["routes"][0]
+    from engine import terrain as _terrain
+    _terrain.enrich_route(r, body.get("terrain", True) is not False)
     return {
         "rider": rider, "minutes": minutes, "kind": "scenic-chain",
         "origin": list(g.node_pos(origin)),
@@ -684,9 +706,11 @@ def ride_suggest(body: dict):
         "bike_class": p.get("bike_class"),
         "excluded_segments": excluded,
         "total_segments": len(g.segments),
+        "demo_mode": bool(p.get("demo_mode") or _cell_state["demo"]),
         "routes": [{k: r[k] for k in
                     ("label", "coords", "kpis", "roads", "stops", "legs",
-                     "visited", "value_thirds", "urban_share")}],
+                     "visited", "value_thirds", "urban_share",
+                     "personalization", "spot_search")}],
     }
 
 
@@ -695,7 +719,15 @@ def ride_pois(limit: int = 400):
     idx = get_scenic_index()
     pois = sorted(idx.pois, key=lambda p: -p["weight"])[:limit]
     return {"total": len(idx.pois),
-            "pois": [{k: p[k] for k in ("name", "kind", "lat", "lon", "weight")}
+            "pois": [{"name": p["name"], "kind": p["kind"],
+                       "lat": p["target_lat"], "lon": p["target_lon"],
+                       "weight": p["weight"],
+                       "objective_scenic": p["objective_scenic"],
+                       "location_source": p["target_source"],
+                       "rider_style_owner": p["rider_style_owner"],
+                       "style_features": p["style_features"],
+                       "rider_fit": p["rider_fit"],
+                       "rider_rank": p["rider_rank"]}
                      for p in pois]}
 
 
