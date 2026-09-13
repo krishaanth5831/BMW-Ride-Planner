@@ -735,6 +735,80 @@ def ride_fog(rider: str, targets: int = 8):
     return out
 
 
+@app.post("/api/ride/discover")
+def ride_discover(body: dict):
+    """Plan a loop that goes to a road this rider has never ridden.
+
+    The fog map's whole point is to end in a ride. Same cost function, same
+    escape-the-city behaviour, one forced stop: the road they picked.
+    """
+    rider = (body.get("rider") or "A").upper()
+    p = get_profile(rider)
+    minutes = float(body.get("minutes") or p.get("typical_ride_min") or 150)
+    target = body.get("target")
+    if not target or len(target) != 2:
+        raise HTTPException(400, "target must be [lat, lon]")
+    origin_ll = body.get("origin") or [p["home"]["lat"], p["home"]["lon"]]
+    if not (_in_bbox(origin_ll) and _in_bbox(target)):
+        raise HTTPException(400, "origin or target is outside the cached road tiles")
+
+    g = get_road_graph()
+    cg = get_cell_graph()
+    cost = _croads.RoadCost(
+        g, _cells.Cost(cg, _cells.Rider(cg, ridden=p.get("ridden_squares"),
+                                        lean_p95=p.get("lean_ceiling") or 35.0)),
+        escape=bool(body.get("escape", True)))
+    origin = g.nearest_node(*origin_ll)
+    stop_node = g.nearest_node(*target)
+    if origin is None or stop_node is None:
+        raise HTTPException(400, "could not snap to a road")
+
+    # Pinned as the ANCHOR of a normal scenic chain, not routed to and back.
+    # An out-and-back to one road retraces itself, which the chain builder
+    # rejects as a destination on a stick -- correctly. Going through it on a
+    # loop is both a better ride and the thing that passes that guard.
+    name = body.get("name") or "your new road"
+    got = _scenic.plan_scenic_loop(
+        g, cost, get_scenic_index(), origin, minutes,
+        alpha=float(body.get("alpha", 3.0)),
+        max_stops=int(body.get("max_stops", 2)),
+        rider_id=rider if rider in _scenic.RIDER_TYPES else "A",
+        rider_profile=p,
+        must_include=(target[0], target[1], name),
+        # The rider picked this road, so a longer shared stretch is acceptable
+        # here in a way it would not be for a ride the planner invented. Still
+        # capped, so it cannot degenerate into out-and-back down one road.
+        retrace=(14_000.0, 0.22))
+    if not got or not got.get("routes"):
+        raise HTTPException(
+            404, got.get("reason")
+            or "That road will not fit inside this much time. Try longer.")
+
+    r = got["routes"][0]
+    # The chain builder falls through to another anchor when the pinned one
+    # cannot make a loop, which is right for a joy ride and wrong here: the
+    # rider asked for THAT road. Offering a different one without saying so
+    # would be the planner quietly ignoring them.
+    reached = min(
+        (_scenic.haversine_m((target[0], target[1]), (c[0], c[1]))
+         for c in r["coords"][::3]), default=1e9)
+    if reached > 1500.0:
+        raise HTTPException(
+            404,
+            f"No loop through {name} fits in {minutes:.0f} minutes without "
+            f"riding the same road both ways. Give it longer.")
+    return {
+        "rider": rider, "minutes": minutes, "kind": "discover",
+        "origin": list(g.node_pos(origin)),
+        "lean_ceiling": p.get("lean_ceiling"),
+        "excluded_segments": sum(1 for seg in g.segments if cost.excluded(seg)),
+        "total_segments": len(g.segments),
+        "routes": [{k: r[k] for k in
+                    ("label", "coords", "kpis", "roads", "stops", "legs",
+                     "visited", "value_thirds", "urban_share")}],
+    }
+
+
 @app.get("/api/ride/pois")
 def ride_pois(limit: int = 400):
     idx = get_scenic_index()

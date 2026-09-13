@@ -499,7 +499,14 @@ button, .btn {
 .target:hover .tn { color: var(--warm); }
 .target .tn { font-weight: 500; font-size: 13.5px; }
 .target .tk { font-family: var(--mono); font-size: 12px; color: var(--ink-faint); }
-.target .tv { font-family: var(--mono); font-size: 12px; color: var(--warm); }
+.target .tv { font-family: var(--mono); font-size: 12px; color: var(--bad); }
+.discover { margin-top: 16px; padding: 14px; border-radius: var(--r-card);
+            background: var(--raised); border: 1px solid var(--line); }
+.discover .dq { font-weight: 600; font-size: 15px; margin-bottom: 4px; }
+.fogkey { display: flex; gap: 14px; margin-top: 10px; font-size: 11.5px;
+          color: var(--ink-dim); }
+.fogkey i { display: inline-block; width: 14px; height: 3px; border-radius: 2px;
+            margin-right: 5px; vertical-align: middle; }
 
 @media (max-width: 900px) {
   body { grid-template-columns: 1fr; grid-template-rows: auto 52dvh; height: auto; padding: 4px; gap: 4px; }
@@ -1430,6 +1437,7 @@ function render() {
 
 /* --------------------------------------------------------------- ride ---- */
 async function plan(minutesOverride = null, sourceButton = null) {
+  if (fogShown) toggleFog(false);   // planning a ride leaves the fog view
   const w = windows[chosen];
   const mins = minutesOverride === null ? +$('mins').value : Number(minutesOverride);
   const btn = sourceButton || $('plan');
@@ -1583,6 +1591,14 @@ let fogShown = false;
 
 function toggleFog(on) {
   fogShown = on;
+  // Fog and route are two different views of the same map, and leaving both
+  // on was the bug: route-active outranks fog-active on specificity, so the
+  // globe came back over a map still covered in fog lines.
+  if (on) {
+    $('mapStage').classList.remove('route-active', 'navigating');
+    layers.route.clearLayers();
+    layers.stops.clearLayers();
+  }
   const m = [layers.fog, layers.fogTargets];
   m.forEach(l => on ? l.addTo(map) : map.removeLayer(l));
   // Dim the basemap while the fog is up, so the lit roads read as the subject
@@ -1606,16 +1622,26 @@ async function loadFog(rider) {
   layers.fogTargets.clearLayers();
   try {
     const d = await api('/api/ride/fog/' + rider);
+    // Green is "you have been here", full stop: a road you have ridden is
+    // yours whether or not it scored well. Red is the opposite claim -- good
+    // road, never ridden -- so the two colours answer different questions and
+    // are never mixed.
     for (const [a, b, c, e] of d.ridden) {
       L.polyline([[a, b], [c, e]], {
-        color: '#5eb9f0', weight: 2, opacity: .75, renderer: fogCanvas,
+        color: '#6fcf97', weight: 2, opacity: .8, renderer: fogCanvas,
+        interactive: false
+      }).addTo(layers.fog);
+    }
+    for (const [a, b, c, e] of (d.scenic_unridden || [])) {
+      L.polyline([[a, b], [c, e]], {
+        color: '#e35f59', weight: 3, opacity: .95, renderer: fogCanvas,
         interactive: false
       }).addTo(layers.fog);
     }
     for (const t of d.targets) {
       L.circleMarker([t.lat, t.lon], {
-        radius: 7, color: '#d6a450', weight: 2, fillColor: '#d6a450',
-        fillOpacity: .28, renderer: fogCanvas
+        radius: 7, color: '#e35f59', weight: 2, fillColor: '#e35f59',
+        fillOpacity: .3, renderer: fogCanvas
       }).addTo(layers.fogTargets)
         .bindPopup(`<b>${t.name}</b><br>${t.km} km you have never ridden`);
     }
@@ -1628,7 +1654,17 @@ async function loadFog(rider) {
       <div class="legend">${d.pct}% of the good motorcycling road down here.</div>
       <button class="ghost" id="fogToggle" aria-pressed="false"
               style="margin-top:12px">Show it on the map</button>
-      <div class="legend" style="margin-top:16px">Best roads you have never ridden</div>
+
+      <div class="discover">
+        <div class="dq">Fancy somewhere new today?</div>
+        <div class="legend">There are
+          <b class="num">${Math.round(d.scenic_unridden_km || 0)} km</b> of good
+          road down here you have never been down. They are the red ones.</div>
+        <button class="primary" id="discoverBtn"
+                style="margin-top:12px">Show me somewhere new</button>
+      </div>
+
+      <div class="legend" style="margin-top:18px">Best roads you have never ridden</div>
       <div id="targets"></div>`;
     $('targets').innerHTML = d.targets.map((t, i) => `
       <button class="target" data-i="${i}">
@@ -1644,6 +1680,15 @@ async function loadFog(rider) {
       };
     }
     $('fogToggle').onclick = () => toggleFog(!fogShown);
+    $('discoverBtn').onclick = () => {
+      if (!fogShown) toggleFog(true);
+      const t = d.targets[0];
+      if (t) {
+        map.setView([t.lat, t.lon], 12);
+        $('mapStatus').textContent =
+          `${t.name}: ${t.km} km you have never ridden`;
+      }
+    };
   } catch (e) {
     $('fog').className = 'msg bad';
     $('fog').textContent = e.message;

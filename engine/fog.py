@@ -39,6 +39,13 @@ MIN_TARGET_M = 3_000.0
 # unridden for a reason.
 TARGET_URBAN_MAX = RURAL_MAX
 
+# (*) Which slice of the unridden roads is worth marking as "go here". Taken as
+# a PERCENTILE of this rider's own unridden set rather than a fixed score, so
+# the red layer stays a shortlist whether somebody has ridden 10% of the region
+# or 90% of it. A fixed cutoff would show everything to a new rider and nothing
+# to an experienced one.
+SCENIC_PERCENTILE = 0.80
+
 
 def ridden_segments(g: RoadGraph, squares) -> set[int]:
     """Seg ids whose square this rider has been through."""
@@ -134,11 +141,37 @@ def lines(g: RoadGraph, seg_ids, simplify: bool = True) -> list:
     return out
 
 
+def scenic_unridden(g: RoadGraph, cost: RoadCost, ridden: set[int]):
+    """The good roads still in the fog. Red on the map.
+
+    Scored the same way the router scores them, so what glows red is exactly
+    what the planner would route you down if you asked. Restricted to roads
+    out of town that the crowd has actually ridden: an empty road with no
+    evidence behind it is not a recommendation.
+    """
+    scored = []
+    for s in g.segments:
+        if s["seg_id"] in ridden:
+            continue
+        if g.urban_at(*s["mid"]) > TARGET_URBAN_MAX or g.cell_of(s) is None:
+            continue
+        scored.append((cost.value(s), s["seg_id"]))
+    if not scored:
+        return [], 0.0
+    scored.sort()
+    cut = scored[int(SCENIC_PERCENTILE * (len(scored) - 1))][0]
+    return [i for v, i in scored if v >= cut], cut
+
+
 def build(g: RoadGraph, cost: RoadCost, squares, n_targets: int = 8) -> dict:
     ridden = ridden_segments(g, squares)
     cov = coverage(g, ridden)
+    scenic, cut = scenic_unridden(g, cost, ridden)
     return {
         **cov,
         "ridden": lines(g, sorted(ridden)),
+        "scenic_unridden": lines(g, scenic),
+        "scenic_cutoff": round(cut, 3),
+        "scenic_unridden_km": round(_km(g, scenic), 1),
         "targets": targets(g, cost, ridden, n_targets),
     }

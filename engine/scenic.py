@@ -318,7 +318,9 @@ def plan_scenic_loop(g: RoadGraph, cost: RoadCost, index: ScenicIndex,
                      origin: int, minutes: float, alpha: float = 3.0,
                      max_stops: int = 3, south_bias: bool | None = None,
                      rider_id: str = "A", rider_profile: dict | None = None,
-                     seed: int | str | None = None) -> dict:
+                     seed: int | str | None = None,
+                     must_include: tuple | None = None,
+                     retrace: tuple | None = None) -> dict:
     """A varied ride out to real places and back, inside the time budget.
 
     Randomness only reorders a quality-bounded shortlist and slightly changes
@@ -410,12 +412,36 @@ def plan_scenic_loop(g: RoadGraph, cost: RoadCost, index: ScenicIndex,
     )
     anchors = randomized_shortlist + cands[shortlist_size:18]
 
+    # The fog map asks for a ride to ONE specific road the rider has never
+    # been down. Pinning it as the anchor rather than routing there and back
+    # means the normal chain builder still adds a companion stop and brings
+    # them home a different way -- which is also what keeps it clear of the
+    # destination-on-a-stick guard in _ride.
+    if must_include:
+        m_lat, m_lon = float(must_include[0]), float(must_include[1])
+        m_name = must_include[2] if len(must_include) > 2 else "your new road"
+        m_node = g.nearest_node(m_lat, m_lon)
+        if m_node is not None:
+            pos = g.node_pos(m_node)
+            forced = {
+                "name": m_name, "kind": "unridden", "node": m_node,
+                "lat": m_lat, "lon": m_lon,
+                "road_lat": pos[0], "road_lon": pos[1],
+                "target_lat": pos[0], "target_lon": pos[1],
+                "weight": 1.0, "preference": 1.0, "spot_density": 0.0,
+                "anchor_score": 99.0,
+                "t": secs.get(m_node, budget * 0.5),
+                "bearing": bearing(origin_pos, pos),
+                "dist": haversine_m(origin_pos, pos),
+            }
+            anchors = [forced] + list(anchors)
+
     attempts = 0
     for anchor in anchors:
         attempts += 1
         chain = _build_chain(g, cost, index, origin, anchor, cands, budget,
                              varied_alpha, max_stops, origin_pos, rider_id,
-                             profile_ratings, rng)
+                             profile_ratings, rng, retrace)
         if chain:
             route = chain["routes"][0]
             route["spot_search"] = _spot_search_score(route, rider_id, budget)
@@ -514,7 +540,7 @@ def rank_loop_fallbacks(loops: list[dict], index: ScenicIndex, rider_id: str,
 
 def _build_chain(g, cost, index, origin, anchor, cands, budget, alpha,
                  max_stops, origin_pos, rider_id="A", profile_ratings=None,
-                 rng=None):
+                 rng=None, retrace=None):
     """Greedy, monotone in distance from home, so the ride does not double back."""
     stops = [anchor]
     rng = rng or random.Random(0)
@@ -545,11 +571,11 @@ def _build_chain(g, cost, index, origin, anchor, cands, budget, alpha,
     ordered = stops[1::2] + stops[::2][::-1] if len(stops) > 2 else stops
 
     return _ride(g, cost, index, origin, ordered, alpha, budget, max_stops,
-                 rider_id, profile_ratings or {})
+                 rider_id, profile_ratings or {}, retrace)
 
 
 def _ride(g, cost, index, origin, ordered, alpha, budget, max_stops,
-          rider_id="A", profile_ratings=None):
+          rider_id="A", profile_ratings=None, retrace=None):
     """Walk the chain: one goal-directed leg per stop, then home.
 
     Roads already used are charged four times over on later legs -- BMW's own
@@ -589,8 +615,12 @@ def _ride(g, cost, index, origin, ordered, alpha, budget, max_stops,
     retrace_share = retrace_m / route_m
     # Reject a destination-on-a-stick, but tolerate the short shared street
     # that can be unavoidable when leaving and returning to the same address.
-    if (retrace_m > MAX_RETRACE_M
-            or retrace_share > MAX_RETRACE_SHARE):
+    # The default limits keep an AUTO-GENERATED joy ride from being a
+    # destination on a stick. When the rider has named the road themselves,
+    # sharing more of it is the price of going where they asked, so the caller
+    # can raise the bar -- but never to "any amount".
+    lim_m, lim_share = retrace or (MAX_RETRACE_M, MAX_RETRACE_SHARE)
+    if retrace_m > lim_m or retrace_share > lim_share:
         return None
     route["kpis"]["retrace_km"] = round(retrace_m / 1000.0, 1)
     route["kpis"]["retrace_share"] = round(retrace_share, 3)
@@ -601,7 +631,7 @@ def _ride(g, cost, index, origin, ordered, alpha, budget, max_stops,
             drop = min(ordered, key=lambda s: (s.get("preference", 0), s["weight"]))
             return _ride(g, cost, index, origin,
                          [s for s in ordered if s is not drop], alpha, budget,
-                         max_stops, rider_id, profile_ratings or {})
+                         max_stops, rider_id, profile_ratings or {}, retrace)
         return None
 
     route.update(_thirds(g, cost, segs))
