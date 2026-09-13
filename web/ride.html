@@ -1127,6 +1127,7 @@ async function api(url, body) {
 
 /* --------------------------------------------------------- boot the map ---- */
 (async () => {
+  const poisRequest = api('/api/ride/pois?limit=1000').catch(() => null);
   try {
     const mc = await api('/api/mapconfig');
     layerDefs = mc.layers;
@@ -1136,7 +1137,8 @@ async function api(url, body) {
   }
   useLayer(0);
   try {
-    const p = await api('/api/ride/pois?limit=1000');
+    const p = await poisRequest;
+    if (!p) return;
     updateGlobePois(p.pois);
     for (const poi of p.pois) {
       const r = poi.kind === 'lake' ? 5 : 3.2;
@@ -1144,13 +1146,14 @@ async function api(url, body) {
         radius: r, weight: 1, color: 'rgba(233,237,242,.35)',
         fillColor: poi.kind === 'lake' ? '#4a90b8' : '#8b9099',
         fillOpacity: .5, interactive: true
-      }).addTo(layers.poi).bindPopup(poiPopupElement(poi));
+      }).addTo(layers.poi).bindPopup(() => poiPopupElement(poi));
     }
   } catch { /* POIs are decoration here; the ride still works without them */ }
 })();
 
 /* ------------------------------------------------------------- profile ---- */
 let profile = null;
+let viewGeneration = 0, routeGeneration = 0;
 
 const RIDER_STORIES = {
   A: {
@@ -1215,15 +1218,17 @@ function updateProfileRouteStats(route, result = {}) {
       <div class="reflection-metric"><b>${value}</b><span>${label}</span></div>`).join('')}</div>`;
 }
 
-async function loadProfile(rider) {
+async function loadProfile(rider, generation) {
   $('prof').innerHTML = '<div class="skel"></div><div class="skel"></div>';
   try {
-    profile = await api('/api/ride/profile/' + rider);
+    const loaded = await api('/api/ride/profile/' + rider);
+    if (generation !== viewGeneration) return;
+    profile = loaded;
     const p = profile;
     const story = RIDER_STORIES[rider] || RIDER_STORIES.A;
     $('profSub').textContent = p.demo_mode
       ? 'Dataset-free mode: these are clearly labeled sample riders; no private telemetry is loaded.'
-      : 'Every figure below is measured from your own recorded rides.';
+      : `${p.trips} recorded trips loaded. Ride statistics are measured; bike class and experience are heuristic inferences.`;
     const measured = !p.demo_mode;
     const mark = p.demo_mode ? '<sup class="sample-mark">*</sup>' : '';
     $('prof').className = 'prof';
@@ -1242,6 +1247,7 @@ async function loadProfile(rider) {
         <span class="sample-mark">*</span> Interpretive sample rating derived from aggregate
         descriptions—not a timestamped sensor observation.</div>` : ''}`;
   } catch (e) {
+    if (generation !== viewGeneration) return;
     $('prof').innerHTML = `<div class="msg bad">${e.message}</div>`;
   }
 }
@@ -1260,13 +1266,15 @@ function bars(score) {
     `<i class="${i <= n ? 'on' : ''}" style="height:${5 + i * 2.6}px"></i>`).join('')}</span>`;
 }
 
-async function loadWeather(rider) {
+async function loadWeather(rider, generation) {
   $('weather').className = 'stack';
   $('weather').innerHTML = '<div class="skel tall"></div><div class="skel" style="width:60%"></div>';
   try {
     const w = await api('/api/ride/windows?rider=' + rider);
+    if (generation !== viewGeneration) return;
     weatherIsSample = Boolean(w.demo_mode);
-    weatherSource = w.weather_provider || w.source || '';
+    weatherSource = (w.weather_provider || w.source || '')
+      + (w.stale ? ' · stale cached forecast (network unavailable)' : '');
     latestHour = w.current_hour || null;
     windows = w.windows || [];
     if (!windows.length) {
@@ -1282,9 +1290,10 @@ async function loadWeather(rider) {
     L.marker([w.home.lat, w.home.lon], {
       icon: L.divIcon({ className: '', html: '<div class="home-marker"></div>',
                         iconSize: [15, 15], iconAnchor: [7, 7] })
-    }).addTo(layers.stops).bindPopup(profile && profile.demo_mode
+    }).addTo(layers.stops).bindPopup(w.home_is_sample
       ? 'Home* · sample location' : 'Home');
   } catch (e) {
+    if (generation !== viewGeneration) return;
     $('weather').innerHTML = `<div class="msg bad">${e.message}</div>`;
   }
 }
@@ -1396,6 +1405,7 @@ function render() {
 
 /* --------------------------------------------------------------- ride ---- */
 async function plan(minutesOverride = null, sourceButton = null) {
+  const generation = ++routeGeneration;
   const w = windows[chosen];
   const mins = minutesOverride === null ? +$('mins').value : Number(minutesOverride);
   const btn = sourceButton || $('plan');
@@ -1411,14 +1421,33 @@ async function plan(minutesOverride = null, sourceButton = null) {
     const d = await api('/api/ride/suggest', {
       rider: $('riderSel').value, minutes: mins,
       weather: Math.min(1, (w.rain_pct || 0) / 100),
+      terrain: false, // Display the unchanged route before the optional DEM fetch.
     });
+    if (generation !== routeGeneration) return;
+    const route = d.routes && d.routes[0];
+    if (route) route.kpis.elevation_pending = true;
     drawRide(d);
+    if (route) {
+      api('/api/ride/terrain', { coords: route.coords }).then(kpis => {
+        if (generation !== routeGeneration) return;
+        Object.assign(route.kpis, kpis, { elevation_pending: false });
+        renderRideDetails(d, route);
+        updateProfileRouteStats(route, d);
+      }).catch(() => {
+        if (generation !== routeGeneration) return;
+        route.kpis.elevation_pending = false;
+        route.kpis.elevation_available = false;
+        renderRideDetails(d, route);
+      });
+    }
   } catch (e) {
+    if (generation !== routeGeneration) return;
     $('ride').className = 'msg bad';
     $('ride').textContent = e.message;
     $('mapMode').textContent = 'Route search stopped';
     $('mapStatus').textContent = e.message;
   }
+  if (generation !== routeGeneration) return;
   setNavigationLoading(false);
   actionButtons.forEach(button => { button.disabled = false; });
   btn.innerHTML = label;
@@ -1468,6 +1497,11 @@ function drawRide(d) {
   $('mapMode').textContent = r.label;
   $('mapStatus').textContent = `${k.km} km · ${Math.round(k.minutes)} min · following the route`;
   routePreviewTimer = setTimeout(() => previewRoute(r.coords), 650);
+  renderRideDetails(d, r);
+}
+
+function renderRideDetails(d, r) {
+  const k = r.kpis;
   const legs = r.legs || [];
   const stopRows = (r.stops || []).map((s, i) => `
     <div class="stop"><div class="pin">${i + 1}</div>
@@ -1488,7 +1522,7 @@ function drawRide(d) {
     <div class="figs">
       <div class="fig"><b class="num">${k.km}</b><span>km</span></div>
       <div class="fig"><b class="num">${Math.round(k.minutes)}</b><span>minutes</span></div>
-      <div class="fig"><b class="num">${k.elevation_available === false ? '—' : Math.round(k.elev_gain_m)}</b><span>m climb</span></div>
+      <div class="fig"><b class="num">${k.elevation_pending ? '…' : k.elevation_available === false ? '—' : Math.round(k.elev_gain_m)}</b><span>m climb</span></div>
     </div>
     <div class="stops">${stopRows}
       ${back !== null ? `<div class="stop"><div class="pin home">&#8962;</div>
@@ -1532,6 +1566,7 @@ function drawRide(d) {
     ${k.sharp_turns !== undefined ? `<div class="legend">
       Geometry analysis: <b class="num">${k.sharp_turns} sharp turns</b>,
       ${k.hairpin_turns} hairpins · ${k.curves_per_10km} per 10 km.</div>` : ''}
+    ${k.elevation_pending ? '<div class="legend">Route ready. Loading elevation in the background…</div>' : ''}
     ${k.elevation_available ? `<div class="legend">
       Elevation: <b class="num">${k.elevation_min_m}–${k.elevation_max_m} m</b> from
       ${k.elevation_samples} route samples · Open-Meteo / Copernicus DEM.</div>` : ''}
@@ -1543,6 +1578,9 @@ function drawRide(d) {
 
 /* --------------------------------------------------------------- init ---- */
 async function load(rider) {
+  const generation = ++viewGeneration;
+  ++routeGeneration;
+  profile = null;
   setRiderBike(rider);
   setNavigationLoading(false);
   stopRoutePreview();
@@ -1560,8 +1598,7 @@ async function load(rider) {
   $('ride').className = 'msg'; $('ride').textContent = 'Nothing planned yet.';
   chosen = 0;
   if (globeReady) startIdleGlobeTour();
-  await loadProfile(rider);
-  await loadWeather(rider);
+  await Promise.all([loadProfile(rider, generation), loadWeather(rider, generation)]);
 }
 $('riderSel').onchange = e => load(e.target.value);
 load('A');

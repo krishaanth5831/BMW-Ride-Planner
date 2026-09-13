@@ -27,6 +27,8 @@ import math
 import os
 import random
 
+from engine.spatial import PointIndex
+
 from engine.cell_osm_router import (MARIENPLATZ, RURAL_MAX, RoadCost, RoadGraph,
                                     _thirds, bearing, build, dijkstra,
                                     path_segments)
@@ -283,10 +285,28 @@ class ScenicIndex:
         # Thin the polyline before the O(n*m) sweep; 2287 points against 600
         # POIs is slow and pointless at 100 m resolution.
         pts = coords[::3] or coords
+        point_index = PointIndex((i, c[0], c[1]) for i, c in enumerate(pts))
+        # Conservative spherical bounds, then the original exact haversine
+        # test. No geometry samples, POIs or route candidates are removed.
+        angular = max(0.0, within_m) / 6_371_000.0
+        latitude_delta = math.degrees(angular)
         out = []
         for p in self.pois:
+            lat, lon = p["target_lat"], p["target_lon"]
+            cosine = math.cos(math.radians(lat))
+            longitude_delta = (180.0 if abs(lat) + latitude_delta >= 90
+                               else math.degrees(math.asin(min(1.0, math.sin(angular)
+                                                                 / max(cosine, 1e-15)))))
+            # Road fixtures are regional. At the date line use the full sweep.
+            nearby = (range(len(pts)) if abs(lon) + longitude_delta >= 180 else
+                      point_index.in_box(lat - latitude_delta - 1e-10,
+                                         lon - longitude_delta - 1e-10,
+                                         lat + latitude_delta + 1e-10,
+                                         lon + longitude_delta + 1e-10))
+            if not nearby:
+                continue
             best = min(haversine_m((p["target_lat"], p["target_lon"]),
-                                   (c[0], c[1])) for c in pts)
+                                   (pts[i][0], pts[i][1])) for i in nearby)
             if best <= within_m:
                 out.append({"name": p["name"], "kind": p["kind"],
                             "lat": p["target_lat"], "lon": p["target_lon"],
@@ -308,10 +328,19 @@ class ScenicIndex:
 
 
 def _leg(g: RoadGraph, cost: RoadCost, a: int, b: int, alpha: float, used: set):
+    # Shortening a rejected chain often repeats an identical first leg.
+    # Include the complete reuse set: that penalty must never be lost.
+    cache = cost.__dict__.setdefault("_leg_cache", {})
+    key = (a, b, alpha, frozenset(used))
+    if key in cache:
+        return cache[key]
     _d, _s, ps, pn = dijkstra(
         g, cost, a, alpha, goal=b, reuse=used,
         reuse_multiplier=SCENIC_REUSE_MULTIPLIER)
-    return path_segments(ps, pn, a, b)
+    result = path_segments(ps, pn, a, b)
+    if len(cache) < 256:
+        cache[key] = result
+    return result
 
 
 def plan_scenic_loop(g: RoadGraph, cost: RoadCost, index: ScenicIndex,

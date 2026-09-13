@@ -30,6 +30,8 @@ import os
 from collections import defaultdict
 
 from engine.cell_router import BETA, Cost
+from engine.cache import derived_json, signature
+from engine.spatial import PointIndex
 from precompute.build_osm_graph import (build_index, geometric_curviness,
                                         haversine_m, subdivide, ways_to_segments)
 from precompute.morton import LEVEL_NODE, morton_code
@@ -89,6 +91,13 @@ class RoadGraph:
             self._pos.setdefault(s["node_b"], (g[-1][0], g[-1][1]))
         self._main = self._main_component()
         self._urban = self._urbanness()
+        self._node_index = PointIndex((node, lat, lon)
+                                      for node, (lat, lon) in self._pos.items()
+                                      if node in self._main)
+        self.arcs = {node: [(sid, self.other_end(self.by_id[sid], node)) for sid in ids]
+                     for node, ids in self.adj.items()}
+        self._segment_cells = {}
+        self._segment_seconds = {}
 
     def _annotate_road_runs(self) -> None:
         """Attach the total named-road length to each ~100 m chunk."""
@@ -169,11 +178,17 @@ class RoadGraph:
         return self._pos.get(node, (0.0, 0.0))
 
     def cell_of(self, seg: dict) -> dict:
-        return self.cells.at(*seg["mid"])
+        sid = seg["seg_id"]
+        if sid not in self._segment_cells:
+            self._segment_cells[sid] = self.cells.at(*seg["mid"])
+        return self._segment_cells[sid]
 
     def seconds(self, seg: dict) -> float:
-        v = self.cells.speed_of(seg)
-        return (float(seg["length_m"]) / 1000.0) / max(v, 3.0) * 3600.0
+        sid = seg["seg_id"]
+        if sid not in self._segment_seconds:
+            v = self.cells.speed_of(seg)
+            self._segment_seconds[sid] = (float(seg["length_m"]) / 1000.0) / max(v, 3.0) * 3600.0
+        return self._segment_seconds[sid]
 
     def nearest_node(self, lat: float, lon: float) -> int | None:
         """Snap to the road network.
@@ -184,15 +199,7 @@ class RoadGraph:
         city centre is often more than 45 m from the nearest rideable road.
         A map click should land on the nearest road there is, not fail.
         """
-        best, best_d = None, float("inf")
-        k = math.cos(math.radians(lat))
-        for node, (nlat, nlon) in self._pos.items():
-            if node not in self._main:
-                continue
-            d = (nlat - lat) ** 2 + ((nlon - lon) * k) ** 2
-            if d < best_d:
-                best, best_d = node, d
-        return best
+        return self._node_index.nearest(lat, lon)
 
     def coverage(self) -> float:
         """Share of road segments whose square the crowd actually rode."""
@@ -248,6 +255,17 @@ class RoadCost:
         self.straight_avoidance = max(0.0, straight_avoidance)
         self.rider_style = rider_style
         self.rider_speed_kmh = rider_speed_kmh
+        # A RoadCost belongs to ONE request/profile/weather snapshot. Reuse
+        # exact results across its many Dijkstra legs, never between riders.
+        self._routing_terms = {}
+
+    def routing_terms(self, seg: dict, alpha: float):
+        terms = self._routing_terms.setdefault(alpha, {})
+        sid = seg["seg_id"]
+        if sid not in terms:
+            terms[sid] = (None if self.excluded(seg) else
+                          (self.edge_cost(seg, alpha), self.seconds(seg)))
+        return terms[sid]
 
     def seconds(self, seg: dict) -> float:
         """Road time adjusted to the selected rider's demonstrated pace."""
@@ -336,6 +354,9 @@ def dijkstra(g: RoadGraph, cost: RoadCost, start: int, alpha: float, *,
              goal: int | None = None, max_seconds: float | None = None,
              reuse: set | None = None, reuse_multiplier: float = 4.0):
     reuse = reuse or set()
+    reuse_multiplier = max(1.0, reuse_multiplier)
+    weights = cost._routing_terms.setdefault(alpha, {})
+    inf = math.inf
     dist = {start: 0.0}
     secs = {start: 0.0}
     prev_seg: dict[int, int] = {}
@@ -343,27 +364,26 @@ def dijkstra(g: RoadGraph, cost: RoadCost, start: int, alpha: float, *,
     heap = [(0.0, start, -1)]
     while heap:
         d, u, via = heapq.heappop(heap)
-        if d > dist.get(u, float("inf")):
+        if d > dist.get(u, inf):
             continue
         if goal is not None and u == goal:
             break
-        for sid in g.adj.get(u, ()):
-            if sid == via:
+        for sid, v in g.arcs.get(u, ()):
+            if sid == via or v == u:
                 continue                    # no immediate U-turn
-            seg = g.by_id[sid]
-            if cost.excluded(seg):
+            if sid not in weights:
+                cost.routing_terms(g.by_id[sid], alpha)
+            terms = weights[sid]
+            if terms is None:
                 continue
-            v = g.other_end(seg, u)
-            if v == u:
-                continue
-            step = cost.edge_cost(seg, alpha)
+            step, seconds = terms
             if sid in reuse:
-                step *= max(1.0, reuse_multiplier)
-            ns = secs[u] + cost.seconds(seg)
+                step *= reuse_multiplier
+            ns = secs[u] + seconds
             if max_seconds is not None and ns > max_seconds:
                 continue
             nd = d + step
-            if nd < dist.get(v, float("inf")):
+            if nd < dist.get(v, inf):
                 dist[v], secs[v] = nd, ns
                 prev_seg[v], prev_node[v] = sid, u
                 heapq.heappush(heap, (nd, v, sid))
@@ -597,14 +617,23 @@ def load_blob(blob: dict) -> RoadGraph:
     geometry while missing telemetry follows the existing neutral fallbacks.
     """
     cells = CellLookup(blob)
-    base_segments = ways_to_segments(load_ways())
-    for segment in base_segments:
-        segment["curvature_geo"] = geometric_curviness(segment["geometry"])
-    segments = subdivide(base_segments)
-    for s in segments:
-        pts = s["geometry"]
-        mid = pts[len(pts) // 2]
-        s["mid"] = (float(mid[0]), float(mid[1]))
+    def prepare_segments():
+        base_segments = ways_to_segments(load_ways())
+        for segment in base_segments:
+            segment["curvature_geo"] = geometric_curviness(segment["geometry"])
+        segments = subdivide(base_segments)
+        for s in segments:
+            pts = s["geometry"]
+            mid = pts[len(pts) // 2]
+            s["mid"] = (float(mid[0]), float(mid[1]))
+        return segments
+
+    inputs = [os.path.join(FIXTURES, f) for f in os.listdir(FIXTURES)
+              if f.endswith(".json")]
+    inputs += [__file__, os.path.join(ROOT, "precompute", "build_osm_graph.py"),
+               os.path.join(ROOT, "precompute", "morton.py")]
+    segments = derived_json("osm-segments.json", signature(inputs, "osm-v1"),
+                            prepare_segments)
     return RoadGraph(segments, cells)
 
 
