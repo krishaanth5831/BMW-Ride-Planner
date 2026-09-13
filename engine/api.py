@@ -575,6 +575,7 @@ if os.path.isdir(WEB):
 # ---------------------------------------------------------------------------
 
 from engine import fog as _fog  # noqa: E402
+from engine import replay as _replay  # noqa: E402
 from engine import rider_profile as _profile  # noqa: E402
 from engine import rideworthy as _weather  # noqa: E402
 from engine import scenic as _scenic  # noqa: E402
@@ -850,6 +851,31 @@ def ride_discover(body: dict):
                     ("label", "coords", "kpis", "roads", "stops", "legs",
                      "visited", "value_thirds", "urban_share")}],
     }
+
+
+@app.get("/api/ride/replay/{rider}")
+def ride_replay(rider: str):
+    """A ride this rider actually did, read back off the bike.
+
+    Nothing here touches the planner. It is the other half of the loop: the
+    plan says where to go, this says what happened, and every figure in it was
+    measured rather than modelled. Lean angle is the one a phone cannot give
+    you, which is the whole reason a post-ride summary is worth showing.
+    """
+    rider = rider.upper()
+    if rider not in RIDERS:
+        raise HTTPException(404, f"unknown rider {rider}")
+    key = "replay_" + rider
+    if key not in _ride_state:
+        folder = os.path.join(DATASET, RIDERS[rider], "recordedTrips")
+        if not os.path.isdir(folder):
+            raise HTTPException(503, f"rider data not found at {folder}")
+        got = _replay.best_trip(folder)
+        if not got:
+            raise HTTPException(404, "no usable recorded ride for this rider")
+        _ride_state[key] = got
+    return {**_ride_state[key], "rider": rider,
+            "source": "recorded telemetry, not simulated"}
 
 
 @app.get("/api/ride/pois")
