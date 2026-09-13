@@ -18,6 +18,7 @@ import glob
 import math
 import os
 from collections import Counter
+from array import array
 
 from precompute.morton import LEVEL_NODE
 
@@ -50,15 +51,15 @@ def _hav(a, b) -> float:
     return 2 * 6_371_000.0 * math.asin(math.sqrt(h))
 
 
-def build(folder: str, limit: int = 60) -> dict:
-    """Profile one rider from their recorded trips."""
-    leans: list[float] = []
-    rpms: list[float] = []
-    speeds: list[float] = []
+def build(folder: str, limit: int | None = None) -> dict:
+    """Profile every recorded trip, unless a caller explicitly requests a limit."""
+    leans = array("d")
+    rpms = array("d")
+    speeds = array("d")
     codes: set[str] = set()
     starts: list[tuple[float, float]] = []
     durations: list[float] = []
-    gears: list[int] = []
+    gears = array("i")
     trips = 0
     total_m = 0.0
 
@@ -158,4 +159,16 @@ def build(folder: str, limit: int = 60) -> dict:
         "typical_ride_min": round(_pct(durations, 0.5)) if durations else None,
         "longest_ride_min": round(_pct(durations, 0.95)) if durations else None,
         "ridden_squares": sorted(codes),
+        "files_considered": len(glob.glob(os.path.join(folder, "*.csv"))),
+        "file_limit": limit,
     }
+
+
+def load_cached(folder: str) -> dict:
+    """Cache the complete profile, invalidating when a CSV or this code changes."""
+    import hashlib
+    from engine.cache import derived_json, signature
+    files = glob.glob(os.path.join(folder, "*.csv"))
+    key = hashlib.sha256(os.path.abspath(folder).encode()).hexdigest()[:20]
+    fingerprint = signature([__file__, *files], "complete-rider-v1")
+    return derived_json(f"rider-{key}.json", fingerprint, lambda: build(folder))

@@ -65,10 +65,19 @@ built. Both are marked (\*).
 
 ## Quick start
 
+For faster presentation loading and explicit real-data setup, see
+[PERFORMANCE.md](PERFORMANCE.md). Both launchers now support the same
+`BMW_DATASET`, `BMW_RIDER_A/B/C` and `BMW_CELL_GRAPH` configuration.
+
 ```bash
 # macOS, Linux, and Windows: no dataset, pip install, or precomputation needed.
 python3 -m engine.demo_server
 ```
+
+Before presenting, use `python3 -m engine.demo_server --warmup`. This prepares
+cached graphs, complete rider profiles and weather before announcing readiness.
+The route appears before optional elevation statistics finish loading; they
+update on the same page without rerouting.
 
 Open <http://localhost:8000/ride>. The lightweight mode routes on the committed
 OSM fixture, uses clearly labeled sample rider values, and fetches live weather.
