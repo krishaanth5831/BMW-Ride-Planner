@@ -1,0 +1,493 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Ride Planner</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<style>
+/* ---------------------------------------------------------------------------
+   One locked dark theme. One accent. One radius system:
+   cards 16, controls 10, badges pill. Numbers are always mono.
+   --------------------------------------------------------------------------- */
+:root {
+  --ground:   #0a0c0f;
+  --surface:  #12161b;
+  --raised:   #181d24;
+  --line:     #242b34;
+  --line-soft:#1b212a;
+  --ink:      #e9edf2;
+  --ink-dim:  #98a2ae;
+  --ink-faint:#6b7480;
+  --accent:   #2e9bd6;
+  --accent-ink:#04151f;
+  --accent-soft: rgba(46,155,214,.13);
+  --warm:     #e0a836;
+  --bad:      #e0685a;
+  --r-card: 16px;
+  --r-ctl: 10px;
+  --sans: 'Archivo', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body {
+  margin: 0; background: var(--ground); color: var(--ink);
+  font-family: var(--sans); font-size: 14px; line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+  display: grid; grid-template-columns: 430px 1fr; height: 100dvh;
+}
+.num { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+
+/* ---- panel ---- */
+#panel { overflow-y: auto; border-right: 1px solid var(--line); background: var(--surface); }
+#panel::-webkit-scrollbar { width: 9px; }
+#panel::-webkit-scrollbar-thumb { background: var(--line); border-radius: 99px; }
+
+header {
+  display: flex; align-items: center; gap: 12px;
+  padding: 18px 22px; border-bottom: 1px solid var(--line);
+  position: sticky; top: 0; background: var(--surface); z-index: 5;
+}
+.mark {
+  width: 26px; height: 26px; border-radius: 50%; flex: none;
+  background: conic-gradient(from 45deg, #fff 0 25%, var(--accent) 0 50%, #fff 0 75%, var(--accent) 0);
+  border: 2.5px solid #0d1116; box-shadow: 0 0 0 1.5px #3a424d;
+}
+.wordmark { font-weight: 700; letter-spacing: .14em; font-size: 12px; text-transform: uppercase; }
+.wordmark span { display: block; color: var(--ink-faint); letter-spacing: .1em; font-weight: 500; }
+#riderSel {
+  margin-left: auto; background: var(--raised); color: var(--ink);
+  border: 1px solid var(--line); border-radius: var(--r-ctl);
+  padding: 7px 10px; font-family: var(--sans); font-size: 13px;
+}
+
+section { padding: 22px; border-bottom: 1px solid var(--line-soft); }
+h2 { font-size: 17px; font-weight: 600; margin: 0 0 3px; letter-spacing: -.01em; }
+.sub { color: var(--ink-dim); font-size: 13px; margin: 0 0 16px; }
+
+/* ---- the notification ---- */
+.alert {
+  background: linear-gradient(160deg, var(--accent-soft), transparent 70%), var(--raised);
+  border: 1px solid rgba(46,155,214,.32); border-radius: var(--r-card);
+  padding: 18px; position: relative; overflow: hidden;
+}
+.alert .kicker {
+  font-size: 11px; letter-spacing: .13em; text-transform: uppercase;
+  color: var(--accent); font-weight: 600; margin-bottom: 9px;
+}
+.alert .when { font-size: 21px; font-weight: 700; letter-spacing: -.02em; line-height: 1.2; }
+.alert .cond { color: var(--ink-dim); font-size: 13px; margin-top: 5px; }
+.alert .cond b { color: var(--ink); font-weight: 500; }
+
+button, .btn {
+  font-family: var(--sans); font-size: 14px; font-weight: 600;
+  border-radius: var(--r-ctl); border: 1px solid transparent;
+  padding: 11px 16px; cursor: pointer; width: 100%;
+  transition: transform .12s cubic-bezier(.16,1,.3,1), background .16s, border-color .16s;
+}
+.primary { background: var(--accent); color: var(--accent-ink); margin-top: 15px; }
+.primary:hover { background: #3badE8; }
+.primary:active { transform: translateY(1px); }
+.primary:disabled { opacity: .45; cursor: default; transform: none; }
+.ghost {
+  background: transparent; color: var(--ink); border-color: var(--line);
+  padding: 9px 12px; font-weight: 500; font-size: 13px;
+}
+.ghost:hover { border-color: #37404c; background: var(--raised); }
+.ghost[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+
+/* ---- other windows ---- */
+.wins { display: grid; gap: 7px; margin-top: 14px; }
+.win {
+  display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 10px;
+  padding: 11px 13px; border: 1px solid var(--line); border-radius: var(--r-ctl);
+  background: transparent; text-align: left; cursor: pointer; width: 100%;
+  font-family: var(--sans); font-weight: 500;
+}
+.win:hover { border-color: #37404c; background: var(--raised); }
+.win[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); }
+.win .d { font-size: 13.5px; }
+.win .c { color: var(--ink-faint); font-size: 12px; }
+.bars { display: flex; gap: 2px; align-items: flex-end; height: 18px; }
+.bars i { width: 3px; background: var(--line); border-radius: 2px; display: block; }
+.bars i.on { background: var(--accent); }
+
+/* ---- the ride ---- */
+.ride-name { font-size: 19px; font-weight: 700; letter-spacing: -.02em; line-height: 1.25; }
+.figs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px;
+        background: var(--line-soft); border-radius: var(--r-card); overflow: hidden;
+        margin: 16px 0; border: 1px solid var(--line-soft); }
+.fig { background: var(--surface); padding: 13px 14px; }
+.fig b { display: block; font-family: var(--mono); font-size: 20px; font-weight: 500;
+         letter-spacing: -.02em; }
+.fig span { font-size: 11px; color: var(--ink-faint); text-transform: uppercase;
+            letter-spacing: .08em; }
+
+.stops { display: grid; gap: 0; margin-top: 4px; }
+.stop { display: grid; grid-template-columns: 26px 1fr auto; align-items: center;
+        gap: 12px; padding: 9px 0; }
+.stop + .stop { border-top: 1px solid var(--line-soft); }
+.pin { width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center;
+       font-family: var(--mono); font-size: 11px; font-weight: 500;
+       background: var(--accent); color: var(--accent-ink); }
+.pin.home { background: var(--raised); color: var(--ink-dim); border: 1px solid var(--line); }
+.stop .nm { font-weight: 500; }
+.stop .kd { font-size: 11.5px; color: var(--ink-faint); text-transform: capitalize; }
+.stop .km { font-family: var(--mono); font-size: 12.5px; color: var(--ink-dim); }
+
+.meter { margin-top: 16px; }
+.meter .row { display: flex; justify-content: space-between; font-size: 12px;
+              color: var(--ink-dim); margin-bottom: 6px; }
+.meter .row:last-of-type { font-size: 10.5px; color: var(--ink-faint);
+                           text-transform: uppercase; letter-spacing: .07em; }
+.thirds { display: grid; grid-template-columns: repeat(3, 1fr); gap: 3px; }
+.thirds div { height: 5px; border-radius: 3px; background: var(--line); }
+.thirds div.best { background: var(--accent); }
+.legend { font-size: 11.5px; color: var(--ink-faint); margin-top: 7px; }
+
+/* ---- profile ---- */
+.prof { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 18px; }
+.prof div span { display: block; font-size: 11px; color: var(--ink-faint);
+                 text-transform: uppercase; letter-spacing: .08em; }
+.prof div b { font-weight: 600; font-size: 14.5px; }
+.tag { display: inline-block; padding: 2px 9px; border-radius: 99px; font-size: 11px;
+       background: var(--raised); border: 1px solid var(--line); color: var(--ink-dim);
+       margin-left: 6px; font-weight: 500; }
+
+/* ---- states ---- */
+.skel { background: linear-gradient(90deg, var(--raised), #1f262f, var(--raised));
+        background-size: 200% 100%; border-radius: var(--r-ctl); height: 14px;
+        animation: sweep 1.3s ease-in-out infinite; }
+.skel.tall { height: 62px; border-radius: var(--r-card); }
+@keyframes sweep { to { background-position: -200% 0; } }
+.msg { color: var(--ink-dim); font-size: 13px; }
+.msg.bad { color: var(--bad); }
+.stack { display: grid; gap: 9px; }
+
+/* ---- map ---- */
+#map { height: 100dvh; background: var(--ground); }
+.leaflet-container { font-family: var(--sans); background: var(--ground); }
+.leaflet-popup-content-wrapper, .leaflet-popup-tip {
+  background: var(--raised); color: var(--ink); border: 1px solid var(--line);
+}
+.leaflet-popup-content { margin: 10px 13px; font-size: 13px; }
+.leaflet-bar a { background: var(--raised); color: var(--ink); border-color: var(--line); }
+.leaflet-bar a:hover { background: var(--surface); }
+.stop-marker {
+  display: grid; place-items: center; font-family: var(--mono); font-size: 11px;
+  font-weight: 500; width: 24px; height: 24px; border-radius: 50%;
+  background: var(--accent); color: var(--accent-ink); border: 2px solid #0a0c0f;
+  box-shadow: 0 2px 10px rgba(0,0,0,.6);
+}
+.home-marker {
+  width: 15px; height: 15px; border-radius: 50%; background: var(--ink);
+  border: 3px solid var(--ground); box-shadow: 0 0 0 1.5px var(--ink);
+}
+
+@media (max-width: 900px) {
+  body { grid-template-columns: 1fr; grid-template-rows: auto 45dvh; height: auto; }
+  #panel { border-right: 0; border-bottom: 1px solid var(--line); }
+  #map { height: 45dvh; }
+}
+@media (prefers-reduced-motion: reduce) {
+  * { animation: none !important; transition: none !important; }
+}
+</style>
+
+<div id="panel">
+  <header>
+    <div class="mark" aria-hidden="true"></div>
+    <div class="wordmark">BMW Motorrad<span>Ride Planner</span></div>
+    <select id="riderSel" aria-label="Rider">
+      <option value="A">Rider A</option>
+      <option value="B">Rider B</option>
+      <option value="C">Rider C</option>
+    </select>
+  </header>
+
+  <section id="weatherSec">
+    <h2>Next good weather</h2>
+    <p class="sub">Read from the forecast at your home location, scored for riding
+      rather than for sunbathing.</p>
+    <div id="weather" class="stack">
+      <div class="skel tall"></div><div class="skel" style="width:60%"></div>
+    </div>
+  </section>
+
+  <section id="rideSec">
+    <h2>Your ride</h2>
+    <p class="sub" id="rideSub">Pick a window above and the planner builds a route
+      to real places, sized to the time you have.</p>
+    <div id="ride" class="msg">Nothing planned yet.</div>
+  </section>
+
+  <section id="profSec">
+    <h2>What your bike says about you</h2>
+    <p class="sub">Every figure below is measured from your own recorded rides.
+      Nothing was asked for and nothing is assumed.</p>
+    <div id="prof" class="stack"><div class="skel"></div><div class="skel"></div></div>
+  </section>
+</div>
+<div id="map"></div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+const $ = id => document.getElementById(id);
+const ACCENT = '#2e9bd6';
+
+/* ---------------------------------------------------------------- map ---- */
+const map = L.map('map', { zoomControl: true, attributionControl: true })
+  .setView([47.95, 11.45], 10);
+const layers = {
+  poi: L.layerGroup().addTo(map),
+  route: L.layerGroup().addTo(map),
+  stops: L.layerGroup().addTo(map),
+};
+let layerDefs = [], layerIdx = 0, base = null;
+
+function useLayer(i) {
+  if (i >= layerDefs.length) return;
+  layerIdx = i;
+  const def = layerDefs[i];
+  if (base) map.removeLayer(base);
+  let errors = 0;
+  base = L.tileLayer(def.url, { maxZoom: 19, attribution: def.attribution });
+  base.on('tileerror', () => {
+    if (++errors === 6 && i + 1 < layerDefs.length) useLayer(i + 1);
+  });
+  base.addTo(map);
+  base.bringToBack();
+}
+
+async function api(url, body) {
+  const r = await fetch(url, body ? {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(body)
+  } : {});
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(j.detail || r.statusText);
+  return j;
+}
+
+/* --------------------------------------------------------- boot the map ---- */
+(async () => {
+  try {
+    const mc = await api('/api/mapconfig');
+    layerDefs = mc.layers;
+  } catch {
+    layerDefs = [{ url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                   attribution: '&copy; OpenStreetMap contributors' }];
+  }
+  useLayer(0);
+  try {
+    const p = await api('/api/ride/pois?limit=320');
+    for (const poi of p.pois) {
+      const r = poi.kind === 'lake' ? 5 : 3.2;
+      L.circleMarker([poi.lat, poi.lon], {
+        radius: r, weight: 1, color: 'rgba(233,237,242,.35)',
+        fillColor: poi.kind === 'lake' ? '#4a90b8' : '#8b9099',
+        fillOpacity: .5, interactive: true
+      }).addTo(layers.poi).bindPopup(`<b>${poi.name}</b><br>${poi.kind}`);
+    }
+  } catch { /* POIs are decoration here; the ride still works without them */ }
+})();
+
+/* ------------------------------------------------------------- profile ---- */
+let profile = null;
+
+async function loadProfile(rider) {
+  $('prof').innerHTML = '<div class="skel"></div><div class="skel"></div>';
+  try {
+    profile = await api('/api/ride/profile/' + rider);
+    const p = profile;
+    $('prof').className = 'prof';
+    $('prof').innerHTML = `
+      <div><span>Bike</span><b>${p.bike_class}</b>
+        <div class="legend">${p.rpm_per_kmh} rpm per km/h, inferred</div></div>
+      <div><span>Experience</span><b>${p.experience}</b>
+        <div class="legend">${p.trips} rides, ${p.km_total.toLocaleString()} km</div></div>
+      <div><span>Lean used</span><b class="num">${p.lean_p95}&deg;</b>
+        <div class="legend">95th percentile while moving</div></div>
+      <div><span>Safety ceiling</span><b class="num">${p.lean_ceiling}&deg;</b>
+        <div class="legend">Roads beyond this leave your map</div></div>
+      <div><span>Typical ride</span><b class="num">${p.typical_ride_min} min</b></div>
+      <div><span>Ground covered</span><b class="num">${p.squares_ridden.toLocaleString()}</b>
+        <div class="legend">100 m squares ridden</div></div>`;
+  } catch (e) {
+    $('prof').innerHTML = `<div class="msg bad">${e.message}</div>`;
+  }
+}
+
+/* ------------------------------------------------ weather notification ---- */
+let windows = [], chosen = 0;
+
+function bars(score) {
+  const n = Math.round(score * 5);
+  return `<span class="bars">${[1,2,3,4,5].map(i =>
+    `<i class="${i <= n ? 'on' : ''}" style="height:${5 + i * 2.6}px"></i>`).join('')}</span>`;
+}
+
+async function loadWeather(rider) {
+  $('weather').className = 'stack';
+  $('weather').innerHTML = '<div class="skel tall"></div><div class="skel" style="width:60%"></div>';
+  try {
+    const w = await api('/api/ride/windows?rider=' + rider);
+    windows = w.windows || [];
+    if (!windows.length) {
+      $('weather').innerHTML = `<div class="msg">No rideable window in the next
+        7 days. Nothing would be sent.</div>`;
+      return;
+    }
+    render();
+    if (w.home) map.setView([w.home.lat, w.home.lon], 11);
+    L.marker([w.home.lat, w.home.lon], {
+      icon: L.divIcon({ className: '', html: '<div class="home-marker"></div>',
+                        iconSize: [15, 15], iconAnchor: [7, 7] })
+    }).addTo(layers.stops).bindPopup('Home');
+  } catch (e) {
+    $('weather').innerHTML = `<div class="msg bad">${e.message}</div>`;
+  }
+}
+
+function render() {
+  const w = windows[chosen];
+  const [s, e] = [new Date(w.start), new Date(w.end)];
+  const hhmm = d => d.toTimeString().slice(0, 5);
+  const today = new Date().toDateString();
+  const tom = new Date(Date.now() + 864e5).toDateString();
+  const day = s.toDateString() === today ? 'Today'
+            : s.toDateString() === tom ? 'Tomorrow' : w.day;
+  $('weather').className = '';
+  $('weather').innerHTML = `
+    <div class="alert">
+      <div class="kicker">Good riding weather</div>
+      <div class="when">${day}, ${hhmm(s)} to ${hhmm(e)}</div>
+      <div class="cond"><b class="num">${w.temp_c}&deg;C</b> &middot;
+        <b class="num">${w.rain_pct}%</b> chance of rain &middot;
+        gusts <b class="num">${w.gust_kmh}</b> km/h</div>
+      <label class="legend" for="mins" style="display:block;margin-top:14px">
+        How long have you got?</label>
+      <input type="range" id="mins" min="60" max="300" step="30"
+             value="${w.suggested_minutes}" style="width:100%;accent-color:var(--accent)">
+      <button class="primary" id="plan">Plan a <span id="minsV" class="num">${w.suggested_minutes}</span> minute ride</button>
+    </div>
+    <div class="wins" id="wins"></div>`;
+  $('wins').innerHTML = windows.slice(0, 5).map((x, i) => {
+    const d = new Date(x.start);
+    return `<button class="win" data-i="${i}" aria-pressed="${i === chosen}">
+      <span><span class="d">${x.day}, ${hhmm(d)}</span>
+      <span class="c"> ${x.hours}h at ${x.temp_c}&deg;C</span></span>
+      ${bars(x.score)}</button>`;
+  }).join('');
+  for (const b of $('wins').querySelectorAll('.win'))
+    b.onclick = () => { chosen = +b.dataset.i; render(); };
+  $('mins').oninput = ev => { $('minsV').textContent = ev.target.value; };
+  $('plan').onclick = plan;
+}
+
+/* --------------------------------------------------------------- ride ---- */
+async function plan() {
+  const w = windows[chosen];
+  const mins = +$('mins').value;
+  const btn = $('plan');
+  const label = btn.innerHTML;
+  btn.disabled = true;
+  btn.textContent = 'Finding roads worth the trip';
+  $('ride').className = 'stack';
+  $('ride').innerHTML = '<div class="skel tall"></div><div class="skel"></div>';
+  try {
+    const d = await api('/api/ride/suggest', {
+      rider: $('riderSel').value, minutes: mins,
+      weather: Math.min(1, (w.rain_pct || 0) / 100),
+    });
+    drawRide(d);
+  } catch (e) {
+    $('ride').className = 'msg bad';
+    $('ride').textContent = e.message;
+  }
+  btn.disabled = false;
+  btn.innerHTML = label;
+}
+
+function drawRide(d) {
+  layers.route.clearLayers();
+  layers.stops.clearLayers();
+  const r = d.routes && d.routes[0];
+  if (!r) {
+    $('ride').className = 'msg';
+    $('ride').textContent = d.reason || 'No ride fitted that window.';
+    return;
+  }
+  L.polyline(r.coords, { color: '#05080b', weight: 8, opacity: .55 }).addTo(layers.route);
+  L.polyline(r.coords, { color: ACCENT, weight: 4, opacity: .95 }).addTo(layers.route);
+
+  L.marker(d.origin, { icon: L.divIcon({ className: '',
+      html: '<div class="home-marker"></div>', iconSize: [15, 15], iconAnchor: [7, 7] })
+  }).addTo(layers.stops).bindPopup('Home');
+
+  (r.stops || []).forEach((s, i) => {
+    L.marker([s.lat, s.lon], { icon: L.divIcon({ className: '',
+        html: `<div class="stop-marker">${i + 1}</div>`,
+        iconSize: [24, 24], iconAnchor: [12, 12] })
+    }).addTo(layers.stops).bindPopup(`<b>${s.name}</b><br>${s.kind}`);
+  });
+  map.fitBounds(L.polyline(r.coords).getBounds(), { padding: [50, 50] });
+
+  const k = r.kpis;
+  const legs = r.legs || [];
+  const stopRows = (r.stops || []).map((s, i) => `
+    <div class="stop"><div class="pin">${i + 1}</div>
+      <div><div class="nm">${s.name}</div><div class="kd">${s.kind}</div></div>
+      <div class="km">${legs[i] ? legs[i].km + ' km' : ''}</div></div>`).join('');
+  const back = legs.length ? legs[legs.length - 1].km : null;
+  const t = r.value_thirds || [];
+  const bestIdx = t.length ? t.indexOf(Math.max(...t)) : -1;
+
+  $('rideSub').textContent = d.kind === 'scenic-chain'
+    ? 'Out of town first, then the part you came for, then home.'
+    : 'No scenic chain fitted this budget, so here is the best loop instead.';
+  $('ride').className = '';
+  $('ride').innerHTML = `
+    <div class="ride-name">${r.label}</div>
+    <div class="figs">
+      <div class="fig"><b class="num">${k.km}</b><span>km</span></div>
+      <div class="fig"><b class="num">${Math.round(k.minutes)}</b><span>minutes</span></div>
+      <div class="fig"><b class="num">${Math.round(k.elev_gain_m)}</b><span>m climb</span></div>
+    </div>
+    <div class="stops">${stopRows}
+      ${back !== null ? `<div class="stop"><div class="pin home">&#8962;</div>
+        <div><div class="nm">Home</div><div class="kd">return</div></div>
+        <div class="km">${back} km</div></div>` : ''}</div>
+    ${t.length ? `<div class="meter">
+      <div class="row"><span>Quality of the road, start to finish</span>
+        <span class="num">${Math.round((r.urban_share || 0) * 100)}% in town</span></div>
+      <div class="thirds">${t.map((v, i) =>
+        `<div class="${i === bestIdx ? 'best' : ''}" title="${v}"></div>`).join('')}</div>
+      <div class="row" style="margin:6px 0 0"><span>out</span><span>middle</span><span>back</span></div>
+      <div class="legend">${bestIdx === 1
+        ? 'The middle is the part you came for.'
+        : 'The best stretch is on the way ' + (bestIdx === 0 ? 'out' : 'home')
+          + ' this time, not in the middle.'}</div></div>` : ''}
+    ${(r.visited || []).length ? `<div class="legend" style="margin-top:14px">
+      Passes ${r.visited.length} mapped scenic points, closest
+      ${r.visited.slice(0, 3).map(v => v.name).join(', ')}.</div>` : ''}
+    ${r.roads && r.roads.length ? `<div class="legend">Via ${r.roads.slice(0, 4).join(', ')}.</div>` : ''}
+    ${d.excluded_segments ? `<div class="legend" style="margin-top:10px">
+      <b class="num">${d.excluded_segments.toLocaleString()}</b> roads were left out
+      because the crowd rides them harder than your ${d.lean_ceiling}&deg; lean
+      ceiling. Ride more angle and they open up.</div>` : ''}`;
+}
+
+/* --------------------------------------------------------------- init ---- */
+async function load(rider) {
+  layers.route.clearLayers(); layers.stops.clearLayers();
+  $('ride').className = 'msg'; $('ride').textContent = 'Nothing planned yet.';
+  chosen = 0;
+  await loadProfile(rider);
+  await loadWeather(rider);
+}
+$('riderSel').onchange = e => load(e.target.value);
+load('A');
+</script>

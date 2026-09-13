@@ -19,10 +19,27 @@ from fastapi.staticfiles import StaticFiles
 
 from engine import weather as weather_mod
 from engine.profile import build_profile
-from engine.router import Graph, plan_ab, plan_loop
+from engine.router import Graph, plan_alternatives, plan_heatmap, plan_loop
 from engine.scoring import Scorer
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+
+def _load_env(path: str = None) -> None:
+    """Read .env without adding a dependency. Real environment always wins."""
+    path = path or os.path.join(ROOT, ".env")
+    if not os.path.exists(path):
+        return
+    with open(path) as fh:
+        for line in fh:
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            k, _, v = line.partition("=")
+            os.environ.setdefault(k.strip(), v.strip().strip("'\""))
+
+
+_load_env()
 DATA = os.path.join(ROOT, "data")
 WEB = os.path.join(ROOT, "web")
 DATASET = os.environ.get(
@@ -73,17 +90,38 @@ def health():
         return JSONResponse({"ok": False, "detail": e.detail}, status_code=503)
 
 
+def _in_bbox(point: tuple[float, float], bbox: list | tuple) -> bool:
+    lat, lon = point
+    south, west, north, east = map(float, bbox)
+    return south <= lat <= north and west <= lon <= east
+
+
 def _plan(paths: list[str], name: str, mode: str, minutes: float | None,
-          dest: tuple[float, float] | None, start_hour: float | None = None) -> dict:
+          dest: tuple[float, float] | None, start_hour: float | None = None,
+          origin_override: tuple[float, float] | None = None,
+          radius_km: float = 100.0) -> dict:
     graph = get_graph()
+    meta = _state.get("meta", {})
+    if mode == "heatmap" and (not dest or not origin_override):
+        raise HTTPException(422, "heatmap mode requires origin_lat/lon and dest_lat/lon")
+    if origin_override and not _in_bbox(origin_override, meta.get("bbox", [])):
+        raise HTTPException(422, {"message": "origin is outside the covered graph",
+                                  "meta": {"bbox": meta.get("bbox")}})
+    if dest and not _in_bbox(dest, meta.get("bbox", [])):
+        raise HTTPException(422, {"message": "destination is outside the covered graph",
+                                  "meta": {"bbox": meta.get("bbox")}})
+
     profile = build_profile(paths, graph.segments, name=name,
                             index=_state.get("index"))
-    # Scenic-only: the scorer takes the profile purely for the capability
-    # ceiling and never for taste weights.
-    scorer = Scorer(graph.segments, profile)
 
     ctx = profile["context"]
-    origin = ctx["origin"]
+    # Point A: whatever the user clicked, else the rider's own usual start.
+    if origin_override:
+        origin = {"lat": origin_override[0], "lon": origin_override[1]}
+        origin_source = "chosen on the map"
+    else:
+        origin = ctx["origin"]
+        origin_source = "the rider's own most frequent trip origin"
     origin_node = graph.nearest_node(origin["lat"], origin["lon"], require_degree=2)
     if origin_node is None:
         raise HTTPException(422, "could not place the rider's start point on the road network")
@@ -99,23 +137,42 @@ def _plan(paths: list[str], name: str, mode: str, minutes: float | None,
     now = _dt.datetime.now(tz)
     hour = int(ctx["usual_start_hour"]) if start_hour is None else int(start_hour)
     depart = now.replace(hour=max(0, min(23, hour)), minute=0, second=0, microsecond=0)
-    sun_ctx = scorer.set_time(depart, origin["lat"], origin["lon"])
-
     wx = weather_mod.fetch(origin["lat"], origin["lon"])
-    wargs = dict(weather=wx.get("risk", 0.0),
-                 weather_factor=wx.get("capability_factor", 1.0))
+    weather_factor = wx.get("capability_factor", 1.0)
+    profile["lean_ceiling"] = round(
+        float(profile.get("lean_ceiling") or 0.0) * weather_factor, 2)
+    profile["capability"]["lean_ceiling"] = profile["lean_ceiling"]
+    scorer = Scorer(graph.segments, profile)
+    sun_ctx = scorer.set_time(depart, origin["lat"], origin["lon"])
+    wargs = dict(weather=wx.get("risk", 0.0), weather_factor=weather_factor)
 
-    if mode == "ab":
+    if mode == "ab" or mode == "heatmap":
         if not dest:
             raise HTTPException(400, "point-to-point mode needs a destination")
-        goal = graph.nearest_node(dest[0], dest[1], require_degree=2)
+        goal = graph.nearest_node(dest[0], dest[1], require_degree=2,
+                                  component=graph.component_of(origin_node))
         if goal is None:
-            raise HTTPException(422, "destination is not near any road in the covered region")
+            raise HTTPException(422, {"message": "destination is not connected to the origin in the covered region",
+                                      "meta": {"bbox": _state["meta"].get("bbox")}})
         if goal == origin_node:
             raise HTTPException(422, "destination is the same place as the start")
-        routes = plan_ab(graph, scorer, origin_node, goal, minutes, **wargs)
+        if mode == "heatmap":
+            sampled = plan_heatmap(graph, scorer, origin_node, goal,
+                                   radius_km=radius_km, n=30,
+                                   highway_avoidance=1.0,
+                                   twist_avoidance=2.5,
+                                   traffic_avoidance=2.0, **wargs)
+            routes = sampled["routes"]
+            heatmap = sampled["heatmap"]
+            heatmap_meta = sampled["meta"]
+        else:
+            routes = plan_alternatives(graph, scorer, origin_node, goal, n=6, **wargs)
+            heatmap = None
+            heatmap_meta = None
         dest_pos = graph.node_pos(goal)
     else:
+        heatmap = None
+        heatmap_meta = None
         routes = plan_loop(graph, scorer, origin_node, minutes, **wargs)
         dest_pos = None
 
@@ -128,7 +185,7 @@ def _plan(paths: list[str], name: str, mode: str, minutes: float | None,
 
     olat, olon = graph.node_pos(origin_node)
     profile.pop("_cells", None)
-    return {
+    response = {
         "mode": mode,
         "requested_minutes": minutes,
         "profile": profile,
@@ -138,7 +195,13 @@ def _plan(paths: list[str], name: str, mode: str, minutes: float | None,
         "destination": ({"lat": dest_pos[0], "lon": dest_pos[1]} if dest_pos else None),
         "routes": routes,
         "explain": {
-            "value_term": "scenic score only (no fun/growth/taste weighting)",
+            "value_term": ("personal heatmap ranking from scenic + fun scores; "
+                            "highways are strongly avoided, not forbidden; "
+                            "long uninterrupted roads are penalised and repeated "
+                            "twists preferred; traffic pressure from BMW crowd "
+                            "telemetry raises cost"
+                            if mode == "heatmap"
+                            else "scenic score only (legacy route mode)"),
             "scenic_is_time_dependent": (
                 "scaled by available light, plus a golden-hour bonus for roads "
                 "that actually face the low sun"),
@@ -148,10 +211,14 @@ def _plan(paths: list[str], name: str, mode: str, minutes: float | None,
                               "tunnel penalty"],
             "profile_used_for": ["capability ceiling (hard exclusion)",
                                  "start point", "default duration"],
-            "why_origin": "the start point of the rider's own most frequent trips",
+            "why_origin": origin_source,
             "graph": _state["meta"],
         },
     }
+    if mode == "heatmap":
+        response["heatmap"] = heatmap
+        response["heatmap_meta"] = heatmap_meta
+    return response
 
 
 @app.post("/api/plan/upload")
@@ -162,6 +229,9 @@ async def plan_upload(
     dest_lat: float | None = Form(None),
     dest_lon: float | None = Form(None),
     start_hour: float | None = Form(None),
+    origin_lat: float | None = Form(None),
+    origin_lon: float | None = Form(None),
+    radius_km: float = Form(100.0),
 ):
     """Upload rider CSVs (or a zip) and get routes back."""
     tmp = tempfile.mkdtemp(prefix="bmw_upload_")
@@ -186,7 +256,49 @@ async def plan_upload(
             raise HTTPException(400, "no .csv telemetry found in the upload")
         name = os.path.basename(files[0].filename or "uploaded").rsplit(".", 1)[0]
         dest = (dest_lat, dest_lon) if dest_lat is not None and dest_lon is not None else None
-        return _plan(csvs, f"upload:{name}", mode, minutes, dest, start_hour)
+        org = (origin_lat, origin_lon) if origin_lat is not None and origin_lon is not None else None
+        return _plan(csvs, f"upload:{name}", mode, minutes, dest, start_hour, org,
+                     radius_km)
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
+@app.post("/api/heatmap")
+@app.post("/api/plan/heatmap")
+async def heatmap_upload(
+    files: list[UploadFile] = File(...),
+    origin_lat: float = Form(...),
+    origin_lon: float = Form(...),
+    dest_lat: float = Form(...),
+    dest_lon: float = Form(...),
+    radius_km: float = Form(100.0),
+    start_hour: float | None = Form(None),
+):
+    """Upload telemetry and build the X→Y route heatmap."""
+    tmp = tempfile.mkdtemp(prefix="bmw_heatmap_")
+    try:
+        csvs: list[str] = []
+        for f in files:
+            path = os.path.join(tmp, os.path.basename(f.filename or "upload"))
+            with open(path, "wb") as out:
+                shutil.copyfileobj(f.file, out)
+            if path.lower().endswith(".zip"):
+                with zipfile.ZipFile(path) as z:
+                    z.extractall(tmp)
+            elif path.lower().endswith(".csv"):
+                csvs.append(path)
+        for dirpath, _dirs, names in os.walk(tmp):
+            for filename in names:
+                if filename.lower().endswith(".csv") and not filename.startswith("."):
+                    path = os.path.join(dirpath, filename)
+                    if path not in csvs:
+                        csvs.append(path)
+        if not csvs:
+            raise HTTPException(400, "no .csv telemetry found in the upload")
+        name = os.path.basename(files[0].filename or "uploaded").rsplit(".", 1)[0]
+        return _plan(csvs, f"upload:{name}", "heatmap", None,
+                     (dest_lat, dest_lon), start_hour,
+                     (origin_lat, origin_lon), radius_km)
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
 
@@ -194,7 +306,10 @@ async def plan_upload(
 @app.post("/api/plan/example/{rider}")
 def plan_example(rider: str, mode: str = "loop", minutes: float | None = None,
                  dest_lat: float | None = None, dest_lon: float | None = None,
-                 start_hour: float | None = None):
+                 start_hour: float | None = None,
+                 origin_lat: float | None = None, origin_lon: float | None = None,
+                 radius_km: float = 100.0):
+
     """Convenience path for the bundled example riders (A / B / C)."""
     folder = os.path.join(DATASET, f"exampleUser{rider.upper()}", "recordedTrips")
     if not os.path.isdir(folder):
@@ -204,7 +319,9 @@ def plan_example(rider: str, mode: str = "loop", minutes: float | None = None,
         if f.endswith(".csv") and not f.startswith(".")
     )
     dest = (dest_lat, dest_lon) if dest_lat is not None and dest_lon is not None else None
-    return _plan(csvs, f"exampleUser{rider.upper()}", mode, minutes, dest, start_hour)
+    org = (origin_lat, origin_lon) if origin_lat is not None and origin_lon is not None else None
+    return _plan(csvs, f"exampleUser{rider.upper()}", mode, minutes, dest, start_hour,
+                 org, radius_km)
 
 
 @app.get("/api/segments")
@@ -234,3 +351,355 @@ if os.path.isdir(WEB):
         return FileResponse(os.path.join(WEB, "index.html"))
 
     app.mount("/static", StaticFiles(directory=WEB), name="static")
+
+
+# ---------------------------------------------------------------------------
+# The original morton-cell router (see MORTON_ROUTER.md). Served alongside the
+# segment planner rather than replacing it, so the two can be compared on the
+# same machine at /cells.
+# ---------------------------------------------------------------------------
+
+from engine import cell_osm_router as _croads  # noqa: E402
+from engine import cell_router as _cells  # noqa: E402
+
+_cell_state: dict = {"graph": None, "roads": None}
+
+
+def get_cell_graph():
+    if _cell_state["graph"] is None:
+        path = os.path.join(DATA, "cell_graph.json")
+        if not os.path.exists(path):
+            raise HTTPException(
+                503,
+                "No crowd graph yet. Run:  python3 precompute/build_cell_graph.py",
+            )
+        _cell_state["graph"] = _cells.load(path)
+    return _cell_state["graph"]
+
+
+def get_road_graph():
+    """OSM geometry with morton-cell costs. Built once; ~3 s and ~66k segments."""
+    if _cell_state["roads"] is None:
+        path = os.path.join(DATA, "cell_graph.json")
+        if not os.path.exists(path):
+            raise HTTPException(
+                503,
+                "No crowd graph yet. Run:  python3 precompute/build_cell_graph.py",
+            )
+        _cell_state["roads"] = _croads.load(path)
+    return _cell_state["roads"]
+
+
+def _cost(g, lean_p95: float, weather: float = 0.0):
+    """A rider with no history yet: neutral weights, their own lean ceiling."""
+    return _cells.Cost(g, _cells.Rider(g, ridden=None, lean_p95=lean_p95), weather)
+
+
+@app.get("/api/cells/health")
+def cells_health():
+    g = get_cell_graph()
+    return {
+        "level": g.level,
+        "squares": len(g.cells),
+        "transitions": len(g.edges),
+        "branching_pct": round(100 * g.branching(), 1),
+        "region_speed_kmh": g.region_speed,
+    }
+
+
+@app.get("/api/cells/coverage")
+def cells_coverage(limit: int = 20000, min_trips: int = 3):
+    """Where the crowd actually is. This is the map -- there is no other one."""
+    g = get_cell_graph()
+    rows = [c for c in g.cells.values() if (c.get("n_trips") or 0) >= min_trips]
+    rows.sort(key=lambda c: -(c.get("n_trips") or 0))
+    step = max(1, len(rows) // max(limit, 1))
+    return {"total": len(rows), "points": [
+        [c["lat"], c["lon"], c["n_trips"], c.get("lean_p50") or 0]
+        for c in rows[::step][:limit]
+    ]}
+
+
+def _in_bbox(pt) -> bool:
+    s, w, n, e = _croads.BBOX
+    return s <= pt[0] <= n and w <= pt[1] <= e
+
+
+@app.post("/api/cells/route")
+def cells_route(body: dict):
+    """Mode 1: A -> B at three alphas.
+
+    `engine` picks where the line is DRAWN, not how it is scored. Both run the
+    identical distortion with the identical morton-cell terms:
+
+      "roads" (default) -- OSM geometry and connectivity, cell scores
+      "cells"           -- the pure lattice, square centres joined up
+    """
+    engine = body.get("engine", "roads")
+    lean = float(body.get("lean_p95", 35.0))
+    weather = float(body.get("weather", 0.0))
+    cg = get_cell_graph()
+    cost_cells = _cost(cg, lean, weather)
+
+    if engine == "cells":
+        start, goal = cg.nearest(*body["start"]), cg.nearest(*body["goal"])
+        if start is None or goal is None:
+            raise HTTPException(400, "could not snap those points to ridden squares")
+        routes = _cells.plan_destination(cg, cost_cells, start, goal)
+        snapped = ([cg.cells[start]["lat"], cg.cells[start]["lon"]],
+                   [cg.cells[goal]["lat"], cg.cells[goal]["lon"]])
+        keys = ("label", "alpha", "coords", "kpis")
+    else:
+        if not (_in_bbox(body["start"]) and _in_bbox(body["goal"])):
+            s, w, n, e = _croads.BBOX
+            raise HTTPException(
+                400,
+                f"Road routing covers {s}-{n} N, {w}-{e} E only -- the cached "
+                f"Overpass tiles. Widen it deliberately with "
+                f"`python3 -m precompute.fetch_osm --bbox ...`, not from a map "
+                f"click. Or switch to the cell engine, which covers everywhere "
+                f"the crowd rode.",
+            )
+        g = get_road_graph()
+        cost = _croads.RoadCost(g, cost_cells,
+                                escape=bool(body.get("escape", True)))
+        start, goal = (g.nearest_node(*body["start"]), g.nearest_node(*body["goal"]))
+        if start is None or goal is None:
+            raise HTTPException(400, "could not snap those points to a road")
+        routes = _croads.plan_destination(g, cost, start, goal)
+        snapped = (list(g.node_pos(start)), list(g.node_pos(goal)))
+        keys = ("label", "alpha", "coords", "kpis", "roads")
+
+    return {
+        "engine": engine,
+        "start": snapped[0],
+        "goal": snapped[1],
+        "excluded_squares": sum(1 for c in cg.cells.values() if cost_cells.excluded(c)),
+        "lean_p95": lean,
+        "routes": [{k: r[k] for k in keys} for r in routes],
+    }
+
+
+@app.post("/api/cells/joyride")
+def cells_joyride(body: dict):
+    """Mode 2: X minutes from here, back to here."""
+    engine = body.get("engine", "roads")
+    lean = float(body.get("lean_p95", 35.0))
+    minutes = float(body.get("minutes", 90))
+    alpha = float(body.get("alpha", 3.0))
+    cg = get_cell_graph()
+    cost_cells = _cost(cg, lean, float(body.get("weather", 0.0)))
+
+    if engine == "cells":
+        start = cg.nearest(*body["origin"])
+        if start is None:
+            raise HTTPException(400, "could not snap that point to a ridden square")
+        loops = _cells.joyride(cg, cost_cells, start, minutes, alpha=alpha)
+        origin = [cg.cells[start]["lat"], cg.cells[start]["lon"]]
+        keys = ("label", "bearing", "overlap", "coords", "kpis")
+    else:
+        if not _in_bbox(body["origin"]):
+            raise HTTPException(400, "origin is outside the cached road tiles")
+        g = get_road_graph()
+        start = g.nearest_node(*body["origin"])
+        cost = _croads.RoadCost(g, cost_cells,
+                                escape=bool(body.get("escape", True)))
+        loops = _croads.joyride(g, cost, start, minutes, alpha=alpha)
+        origin = list(g.node_pos(start))
+        keys = ("label", "bearing", "overlap", "coords", "kpis", "roads",
+                "value_thirds", "urban_share", "turnaround_urban",
+                "escaped_town")
+
+    out = {"engine": engine, "origin": origin,
+           "routes": [{k: r[k] for k in keys} for r in loops]}
+    if engine != "cells":
+        out["origin_urban"] = round(get_road_graph().urban_of_node(start), 2)
+    return out
+
+
+@app.get("/api/mapconfig")
+def mapconfig():
+    """Tile keys for the page.
+
+    They live in .env, not in the committed HTML, and are read at request time
+    so adding one needs no rebuild. Every keyed layer has a keyless fallback,
+    so an absent or expired key degrades the basemap instead of breaking it.
+    """
+    stadia = os.environ.get("STADIA_API_KEY", "")
+    geoapify = os.environ.get("GEOAPIFY_API_KEY", "")
+    layers = []
+    if stadia:
+        layers += [
+            {"id": "outdoors", "name": "Outdoors",
+             "url": "https://tiles.stadiamaps.com/tiles/outdoors/{z}/{x}/{y}{r}.png?api_key=" + stadia,
+             "attribution": "&copy; Stadia Maps &copy; OpenMapTiles &copy; OpenStreetMap",
+             "dark": False},
+            {"id": "terrain", "name": "Terrain",
+             "url": "https://tiles.stadiamaps.com/tiles/stamen_terrain/{z}/{x}/{y}{r}.png?api_key=" + stadia,
+             "attribution": "&copy; Stadia Maps &copy; Stamen Design &copy; OpenStreetMap",
+             "dark": False},
+            {"id": "dark", "name": "Dark",
+             "url": "https://tiles.stadiamaps.com/tiles/alidade_smooth_dark/{z}/{x}/{y}{r}.png?api_key=" + stadia,
+             "attribution": "&copy; Stadia Maps &copy; OpenMapTiles &copy; OpenStreetMap",
+             "dark": True},
+        ]
+    if geoapify:
+        layers.append(
+            {"id": "geoapify-dark", "name": "Dark (Geoapify)",
+             "url": "https://maps.geoapify.com/v1/tile/dark-matter/{z}/{x}/{y}.png?apiKey=" + geoapify,
+             "attribution": "&copy; Geoapify &copy; OpenMapTiles &copy; OpenStreetMap",
+             "dark": True})
+    layers += [
+        {"id": "carto", "name": "Dark (CARTO)",
+         "url": "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
+         "attribution": "&copy; OpenStreetMap &copy; CARTO", "dark": True},
+        {"id": "osm", "name": "OSM", "url": "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
+         "attribution": "&copy; OpenStreetMap contributors", "dark": False},
+    ]
+    return {"layers": layers, "default": layers[0]["id"]}
+
+
+if os.path.isdir(WEB):
+    @app.get("/cells")
+    def cells_page():
+        return FileResponse(os.path.join(WEB, "cells.html"))
+
+
+# ---------------------------------------------------------------------------
+# The product: weather notification -> scenic ride suggestion -> map.
+# Everything below is what a customer sees; /cells stays as the engineering
+# view of the same machinery.
+# ---------------------------------------------------------------------------
+
+from engine import rider_profile as _profile  # noqa: E402
+from engine import rideworthy as _weather  # noqa: E402
+from engine import scenic as _scenic  # noqa: E402
+
+_ride_state: dict = {"index": None, "profiles": {}}
+
+RIDERS = {"A": "exampleUserA", "B": "exampleUserB", "C": "exampleUserC"}
+
+
+def get_scenic_index():
+    if _ride_state["index"] is None:
+        _ride_state["index"] = _scenic.ScenicIndex(get_road_graph(),
+                                                   _scenic.load_pois())
+    return _ride_state["index"]
+
+
+def get_profile(rider: str) -> dict:
+    """Cached: a profile is ~40 CSV files and does not change between asks."""
+    rider = rider.upper()
+    if rider not in RIDERS:
+        raise HTTPException(404, f"unknown rider {rider}; try one of {list(RIDERS)}")
+    if rider not in _ride_state["profiles"]:
+        folder = os.path.join(DATASET, RIDERS[rider], "recordedTrips")
+        if not os.path.isdir(folder):
+            raise HTTPException(503, f"rider data not found at {folder}")
+        _ride_state["profiles"][rider] = _profile.build(folder)
+    return _ride_state["profiles"][rider]
+
+
+@app.get("/api/ride/profile/{rider}")
+def ride_profile(rider: str):
+    p = dict(get_profile(rider))
+    p.pop("ridden_squares", None)        # thousands of codes; not for the wire
+    p["rider"] = rider.upper()
+    return p
+
+
+@app.get("/api/ride/windows")
+def ride_windows(rider: str = "A", days: int = 7):
+    """The notification. Every rideable stretch in the forecast, best first."""
+    p = get_profile(rider)
+    home = p.get("home") or {"lat": 48.137, "lon": 11.576}
+    w = _weather.windows(home["lat"], home["lon"], days=days)
+    for win in w["windows"]:
+        win["headline"] = _weather.headline(win)
+        # What the rider actually has time for: their own typical ride, unless
+        # the good weather is shorter than that.
+        # Long enough to actually get somewhere. A rider whose commute is
+        # 39 minutes still needs about two and a half hours to reach the lakes
+        # from Munich and get back, so the floor is what the geography costs,
+        # not what their weekday riding looks like.
+        typical = p.get("typical_ride_min") or 90
+        win["suggested_minutes"] = int(min(win["ride_minutes"],
+                                           max(150, typical * 3)))
+    w["home"] = home
+    w["rider"] = rider.upper()
+    # Delivery is the one piece not built: this is the payload a push would
+    # carry, not a push.
+    w["delivery"] = "in-app (no push channel wired)"
+    return w
+
+
+@app.post("/api/ride/suggest")
+def ride_suggest(body: dict):
+    """A named ride: out of town, round the scenic points, home again."""
+    rider = (body.get("rider") or "A").upper()
+    p = get_profile(rider)
+    minutes = float(body.get("minutes") or p.get("typical_ride_min") or 120)
+    origin_ll = body.get("origin") or [p["home"]["lat"], p["home"]["lon"]]
+    if not _in_bbox(origin_ll):
+        raise HTTPException(400, "origin is outside the cached road tiles")
+
+    g = get_road_graph()
+    cg = get_cell_graph()
+    rider_obj = _cells.Rider(cg, ridden=p.get("ridden_squares"),
+                             lean_p95=p.get("lean_ceiling") or 35.0)
+    weather_risk = float(body.get("weather") or 0.0)
+    cost = _croads.RoadCost(g, _cells.Cost(cg, rider_obj, weather_risk),
+                            escape=bool(body.get("escape", True)))
+    origin = g.nearest_node(*origin_ll)
+
+    got = _scenic.plan_scenic_loop(
+        g, cost, get_scenic_index(), origin, minutes,
+        alpha=float(body.get("alpha", 3.0)),
+        max_stops=int(body.get("max_stops", 3)),
+        south_bias=body.get("south_bias"))
+
+    if not got["routes"]:
+        # Fall back to the bearing joyride rather than showing nothing -- and
+        # say which one the rider is looking at.
+        loops = _croads.joyride(g, cost, origin, minutes,
+                                alpha=float(body.get("alpha", 3.0)))
+        return {"rider": rider, "minutes": minutes, "kind": "loop",
+                "origin": list(g.node_pos(origin)),
+                "reason": got.get("reason"),
+                "routes": [{k: r[k] for k in
+                            ("label", "bearing", "coords", "kpis", "roads",
+                             "value_thirds", "urban_share")} for r in loops]}
+
+    # How much of the road network this rider's own lean ceiling removed. It is
+    # the difference between Starnberger See and Tegernsee for rider A, so the
+    # product says it rather than quietly handing over a lesser ride.
+    excluded = sum(1 for seg in g.segments if cost.excluded(seg))
+
+    r = got["routes"][0]
+    return {
+        "rider": rider, "minutes": minutes, "kind": "scenic-chain",
+        "origin": list(g.node_pos(origin)),
+        "origin_urban": round(g.urban_of_node(origin), 2),
+        "lean_ceiling": p.get("lean_ceiling"),
+        "bike_class": p.get("bike_class"),
+        "excluded_segments": excluded,
+        "total_segments": len(g.segments),
+        "routes": [{k: r[k] for k in
+                    ("label", "coords", "kpis", "roads", "stops", "legs",
+                     "visited", "value_thirds", "urban_share")}],
+    }
+
+
+@app.get("/api/ride/pois")
+def ride_pois(limit: int = 400):
+    idx = get_scenic_index()
+    pois = sorted(idx.pois, key=lambda p: -p["weight"])[:limit]
+    return {"total": len(idx.pois),
+            "pois": [{k: p[k] for k in ("name", "kind", "lat", "lon", "weight")}
+                     for p in pois]}
+
+
+if os.path.isdir(WEB):
+    @app.get("/ride")
+    def ride_page():
+        return FileResponse(os.path.join(WEB, "ride.html"))

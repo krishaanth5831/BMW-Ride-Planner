@@ -17,7 +17,7 @@ Design docs live in [`plan/`](plan/) — start with
 Upload a rider's telemetry (a whole folder, individual files, or a zip) and get
 routes back, on either **round trip** or **point to point**.
 
-**Routing runs on the scenic score alone** — no fun, growth or taste weighting.
+Legacy round-trip and point-to-point planning remains scenic-first. X→Y heatmap mode adds percentile-scaled fun and a profile-personal score while retaining capability as a hard exclusion.
 The rider profile is still used, but only for things that are not preferences:
 the capability ceiling (a hard exclusion), the start point, and the default ride
 length.
@@ -31,6 +31,20 @@ Everything else is derived from the uploaded data:
 | What counts as "good" | revealed preference — which roads they chose, vs the crowd |
 | What is too much | road-normalised style ratio → a hard capability ceiling |
 | Bike class | rpm-per-km/h, gear count, lean envelope (inferred, confirmable) |
+
+## X→Y heatmap
+
+Choose **X → Y heatmap** in the UI, click A and B on the map, select a 30/50/100 km detour radius, and build the heatmap. The API is also available at `POST /api/heatmap` (or `/api/plan/heatmap`) with the same telemetry FormData as `/api/plan/upload` plus required `origin_lat/lon` and `dest_lat/lon`. It samples up to 30 distinct routes, scores each for scenic, fun, and personal fit, and returns a segment heatmap where greener lines score higher and thicker lines are used by more candidate routes. Coordinates outside the stored Bavaria bbox return `422` with the bbox in the error metadata.
+
+Heatmap mode looks for the same thing a rider does — a road that keeps turning, with nothing in the way — through three positive cost multipliers. They are multipliers on travel time, so every edge cost stays strictly positive and Dijkstra stays valid.
+
+* **Highways are avoided, not forbidden.** Motorways cost 5×, motorway links 4×, trunks 3×, trunk links 2.5×, primary roads 1× and primary links 0.8×. Nothing is hard-blocked, so when a motorway is the only way to connect X to Y the planner still uses it.
+* **Long uninterrupted roads are penalised.** Each segment carries `road_run_km`, the length of the whole road it belongs to (grouped by OSM way, falling back to the road name), not the length of its own ~100 m chunk. Runs beyond 0.6 km are charged an increasing penalty — but only in proportion to how *un*-twisty they are, so a 14 km alpine pass full of corners is untouched while a 14 km dead-straight Bundesstrasse is expensive.
+* **Repeated twists are preferred.** The twist score blends the crowd's measured lean rhythm with 15 m-resampled road geometry, weighted by how many trips actually cover the segment, so roads nobody has ridden are still judged on their real shape.
+* **Traffic pressure comes from BMW crowd telemetry**, not a live traffic API — observed `crawl_share` and the inverse of `band_share`, blended by trip-count confidence against a road-class prior for roads the crowd has not covered. High traffic raises a road's cost; it never excludes it. No API keys and no extra dependencies.
+* **Capability remains a hard exclusion.** A road demanding more lean than the rider's own envelope allows is removed from the graph outright, and no scenic, twist or traffic bonus can buy it back.
+
+Heatmap routing applies `highway_avoidance=1.0`, `twist_avoidance=2.5` and `traffic_avoidance=2.0`; legacy loop and point-to-point routing leave all three at `0.0` and are unchanged. Each route reports `twist_score`, `twisty_pct`, `traffic_pressure`, `max_road_run_km` and `long_straight_km` alongside the existing scenic, fun, personal, crowd-coverage, junction and elevation KPIs.
 
 ## Quick start
 

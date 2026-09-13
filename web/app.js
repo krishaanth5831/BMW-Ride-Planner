@@ -1,17 +1,18 @@
 const COLORS = ['#2ea043', '#d29922', '#a371f7'];
 const map = L.map('map').setView([47.92, 11.45], 10);
-// Plain OSM tiles: no API key. For the demo these should be pre-cached locally
-// so the map survives venue wifi.
 L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
   attribution: '&copy; OpenStreetMap contributors', maxZoom: 18,
 }).addTo(map);
 
 const scenicLayer = L.layerGroup().addTo(map);
 const routeLayer = L.layerGroup().addTo(map);
-let plan = null, selected = 0, mode = 'loop', dest = null, destMarker = null;
+let plan = null, selected = 0, mode = 'loop', scoreMode = 'scenic', exampleRider = null;
+let ptA = null, ptB = null, arm = 'A';
+let markA = null, markB = null;
 
 const $ = (id) => document.getElementById(id);
 const setStatus = (m, c = '') => { $('status').textContent = m; $('status').className = 'status ' + c; };
+const scoreValue = (route) => route.kpis[scoreMode] ?? route.kpis.scenic ?? 0;
 
 async function health() {
   try {
@@ -24,8 +25,6 @@ async function health() {
   } catch { $('health').textContent = 'engine offline'; }
 }
 
-// Underlay: the most scenic roads in the covered region, so you can see what
-// the score actually thinks before asking for a route.
 async function drawScenic() {
   try {
     const { segments } = await (await fetch('/api/segments?limit=3500')).json();
@@ -39,8 +38,6 @@ async function drawScenic() {
   } catch (e) { console.warn('scenic layer', e); }
 }
 
-function bar(v) { return `<div class="bar"><i style="width:${Math.round(v * 100)}%"></i></div>`; }
-
 function renderProfile(p, wx, ex) {
   const c = p.capability, x = p.context;
   const basis = c.style_basis_cells
@@ -50,26 +47,47 @@ function renderProfile(p, wx, ex) {
     <p class="muted">Built from <b>${p.n_trips}</b> rides
       (${p.n_points.toLocaleString()} telemetry points).</p>
     <table>
+      <tr><td>Experience</td><td><b>${p.experience_level || '—'}</b> (${(p.experience_score || 0).toFixed(2)})</td></tr>
       <tr><td>Style ratio <span class="muted">vs crowd, same roads</span></td>
           <td><b>${c.style_ratio.toFixed(2)}×</b></td></tr>
       <tr><td class="muted">basis</td><td class="muted">${basis}</td></tr>
       <tr><td>Lean p90 / p95</td><td>${c.lean_p90.toFixed(1)}° / ${c.lean_p95.toFixed(1)}°</td></tr>
+      <tr><td>Lean ceiling</td><td>${(p.lean_ceiling || c.lean_ceiling || 0).toFixed(1)}°</td></tr>
       <tr><td>Their median ride</td><td>${Math.round(x.median_ride_minutes)} min</td></tr>
-      <tr><td>Usual start hour</td><td>${x.usual_start_hour}:00</td></tr>
       <tr><td>Bike class <span class="muted">inferred</span></td><td>${x.bike_class}</td></tr>
       <tr><td>Total ridden</td><td>${x.total_km.toLocaleString()} km</td></tr>
       <tr><td>Weather</td><td>${wx.available
         ? `${wx.temp_c}°C, ${wx.precip_mm} mm <span class="muted">(${wx.source})</span>`
         : '<span class="muted">unavailable</span>'}</td></tr>
     </table>
-    <p class="muted" style="margin-top:8px">
-      Routing on <b>${ex.value_term}</b>.<br>
-      The profile is used only for: ${ex.profile_used_for.join(', ')}.</p>`;
+    <p class="muted" style="margin-top:8px">${ex.value_term}. Capability is always a hard exclusion.</p>`;
   $('profileCard').classList.remove('hidden');
 }
 
+// One plain sentence per heatmap route: what the avoidance terms bought you.
+function twistyLine(k) {
+  const bits = [];
+  if (k.twisty_pct >= 40) bits.push(`Twisty route — ${k.twisty_pct}% of it on roads that keep turning`);
+  else if (k.twist_score != null) bits.push(`Twist score ${k.twist_score}`);
+  if (k.long_straight_km != null) {
+    bits.push(k.long_straight_km <= 1
+      ? 'no long straight runs'
+      : `${k.long_straight_km} km on long straight roads (longest road run ${k.max_road_run_km} km)`);
+  }
+  if (k.traffic_pressure != null) {
+    bits.push(k.traffic_pressure <= 0.2
+      ? 'traffic avoided'
+      : `traffic pressure ${k.traffic_pressure}`);
+  }
+  return bits.join(' · ');
+}
+
 function renderRoutes(routes) {
-  $('routeList').innerHTML = routes.map((r, i) => `
+  const ordered = [...routes].sort((a, b) => scoreValue(b) - scoreValue(a));
+  const current = plan && plan.mode === 'heatmap' ? ordered : routes;
+  $('routeList').innerHTML = current.map((r) => {
+    const i = routes.indexOf(r);
+    return `
     <div class="route ${i === selected ? 'sel' : ''}" data-i="${i}">
       <div class="top">
         <span><span class="swatch" style="background:${COLORS[i % 3]}"></span><b>${r.label}</b></span>
@@ -77,64 +95,85 @@ function renderRoutes(routes) {
       </div>
       <div class="chips">
         <span class="chip">scenic ${r.kpis.scenic}</span>
+        <span class="chip">fun ${r.kpis.fun ?? '—'}</span>
+        <span class="chip">personal ${r.kpis.personal ?? '—'}</span>
         <span class="chip">${r.kpis.crowd_covered_pct}% crowd</span>
         <span class="chip">${r.kpis.curviness || 0}°/km</span>
         <span class="chip">${r.kpis.junctions} junctions</span>
-        ${r.bearing !== undefined ? `<span class="chip">brg ${r.bearing}°</span>` : ''}
+        ${r.kpis.twisty_pct != null ? `<span class="chip">${r.kpis.twisty_pct}% twisty</span>` : ''}
       </div>
       ${r.via && r.via.length ? `<div class="via">via ${r.via.slice(0, 3).join(' · ')}</div>` : ''}
-    </div>`).join('');
+      <div class="via">On roads BMW riders use <b>${r.kpis.crowd_covered_pct}%</b></div>
+      ${plan && plan.mode === 'heatmap' ? `<div class="via">${twistyLine(r.kpis)}</div>` : ''}
+    </div>`;
+  }).join('');
+  $('next').classList.toggle('hidden', !(plan && plan.mode === 'ab') || routes.length < 2);
   $('routeList').querySelectorAll('.route').forEach((el) =>
     el.addEventListener('click', () => { selected = +el.dataset.i; draw(); }));
 
-  const k = routes[selected].kpis;
+  const r = routes[selected] || routes[0];
+  if (!r) return;
+  const k = r.kpis;
   $('kpis').innerHTML = `
     <table style="margin-top:10px">
+      <tr><td>Selected ${scoreMode}</td><td>${scoreValue(r).toFixed(3)}</td></tr>
       <tr><td>Scenic score</td><td>${k.scenic}</td></tr>
+      <tr><td>Fun score</td><td>${k.fun ?? '—'}</td></tr>
+      <tr><td>Personal score</td><td>${k.personal ?? '—'}</td></tr>
       <tr><td>Distance</td><td>${k.km} km</td></tr>
       <tr><td>Moving time</td><td>${Math.round(k.minutes)} min</td></tr>
       <tr><td>Curviness <span class="muted">measured lean</span></td><td>${k.curviness || '—'} °/km</td></tr>
-      <tr><td>Time leaned over</td><td>${k.leaned_share ? (k.leaned_share * 100).toFixed(0) + '%' : '—'}</td></tr>
       <tr><td>Elevation gain</td><td>${k.elev_gain_m} m</td></tr>
       <tr><td>Junctions</td><td>${k.junctions}</td></tr>
-      <tr><td>Risk <span class="muted">lower is better</span></td><td>${k.risk}</td></tr>
+      <tr><td>Twisty share <span class="muted">roads that keep turning</span></td><td>${k.twisty_pct ?? '—'}%</td></tr>
+      <tr><td>Longest uninterrupted road</td><td>${k.max_road_run_km ?? '—'} km</td></tr>
+      <tr><td>On long straight roads</td><td>${k.long_straight_km ?? '—'} km</td></tr>
+      <tr><td>Traffic pressure <span class="muted">crowd crawl + road class</span></td><td>${k.traffic_pressure ?? '—'}</td></tr>
       <tr><td>On roads BMW riders use</td><td>${k.crowd_covered_pct}%</td></tr>
-    </table>
-    <div class="legend">
-      <i style="background:#2ea043"></i>selected route<br>
-      <i style="background:#1f6f3f"></i>scenic underlay — greener is more scenic<br>
-      Where <b>On roads BMW riders use</b> is low, the score comes from road
-      geometry and class rather than measured lean.
-    </div>`;
+    </table>`;
   $('routeCard').classList.remove('hidden');
+}
+
+function drawHeatmap() {
+  if (!plan.heatmap) return;
+  const chosen = scoreMode;
+  plan.heatmap.forEach((h) => {
+    const value = chosen === 'fun' ? h.fun : chosen === 'personal' ? h.personal : h.scenic;
+    const t = Math.max(0, Math.min(1, value));
+    const w = h.weight || 0;
+    L.polyline(h.geometry, {
+      color: `hsl(${140 * t}, 75%, 42%)`,
+      weight: 1.5 + 2 * w,
+      opacity: 0.45 + 0.5 * w,
+    }).addTo(routeLayer);
+  });
 }
 
 function draw() {
   routeLayer.clearLayers();
   if (!plan) return;
+  if (plan.mode === 'heatmap') drawHeatmap();
   plan.routes.forEach((r, i) => {
     const on = i === selected;
     L.polyline(r.coords, {
-      color: COLORS[i % 3], weight: on ? 5 : 2.5, opacity: on ? 0.95 : 0.3,
+      color: COLORS[i % 3], weight: on ? 5 : (plan.mode === 'heatmap' && i < 3 ? 3.5 : 2.5),
+      opacity: on ? 0.95 : (plan.mode === 'heatmap' && i < 3 ? 0.75 : 0.3),
     }).addTo(routeLayer);
   });
-  const r = plan.routes[selected];
+  const r = plan.routes[selected] || plan.routes[0];
   L.circleMarker([plan.origin.lat, plan.origin.lon], {
     radius: 7, color: '#fff', weight: 2, fillColor: '#1c69d4', fillOpacity: 1,
-  }).bindTooltip('Start — their own most frequent trip origin').addTo(routeLayer);
+  }).bindTooltip('Start — A').addTo(routeLayer);
   if (plan.destination) {
     L.circleMarker([plan.destination.lat, plan.destination.lon], {
       radius: 7, color: '#fff', weight: 2, fillColor: '#f85149', fillOpacity: 1,
-    }).bindTooltip('Destination').addTo(routeLayer);
-  } else if (r.turnaround) {
-    L.circleMarker([r.turnaround.lat, r.turnaround.lon], {
-      radius: 5, color: COLORS[selected % 3], weight: 2, fillOpacity: 0.6,
-    }).bindTooltip('Turnaround').addTo(routeLayer);
+    }).bindTooltip('Destination — B').addTo(routeLayer);
   }
   renderRoutes(plan.routes);
-  // Fit after the panel has re-rendered, so the map has its final size, and
-  // build bounds explicitly from the coordinates rather than from a throwaway
-  // polyline.
+  if (plan.mode === 'heatmap') {
+    $('heatmapLegend').classList.remove('hidden');
+    $('heatmapLegend').innerHTML = '<i style="background:#2ea043"></i> greener = higher selected score · <i style="background:#2ea043;height:6px"></i> thicker = more routes use it';
+  } else $('heatmapLegend').classList.add('hidden');
   const b = L.latLngBounds(r.coords.map((p) => L.latLng(p[0], p[1])));
   requestAnimationFrame(() => {
     map.invalidateSize({ animate: false });
@@ -144,7 +183,9 @@ function draw() {
 
 function params() {
   const p = new URLSearchParams({ mode, minutes: $('mins').value });
-  if (mode === 'ab' && dest) { p.set('dest_lat', dest[0]); p.set('dest_lon', dest[1]); }
+  if (ptA) { p.set('origin_lat', ptA[0]); p.set('origin_lon', ptA[1]); }
+  if ((mode === 'ab' || mode === 'heatmap') && ptB) { p.set('dest_lat', ptB[0]); p.set('dest_lon', ptB[1]); }
+  if (mode === 'heatmap') p.set('radius_km', $('radius').value);
   return p;
 }
 
@@ -154,7 +195,15 @@ async function send(url, opts) {
   try {
     const res = await fetch(url, opts);
     const body = await res.json();
-    if (!res.ok) throw new Error(body.detail || res.statusText);
+    if (!res.ok) {
+      const d = body.detail;
+      let msg = typeof d === 'string' ? d : (d?.message || res.statusText);
+      // Show the covered area too -- "outside the graph" is only actionable if
+      // you are told where the graph actually is.
+      const bb = d?.meta?.bbox;
+      if (bb) msg += ` — covered area is ${bb[0]}, ${bb[1]} to ${bb[2]}, ${bb[3]}.`;
+      throw new Error(msg);
+    }
     plan = body; selected = 0;
     renderProfile(body.profile, body.weather, body.explain);
     draw();
@@ -170,55 +219,105 @@ function chosenFiles() {
   const a = [...$('folder').files], b = [...$('file').files];
   return [...a, ...b].filter((f) => /\.(csv|zip)$/i.test(f.name));
 }
-
 function updatePicked() {
   const f = chosenFiles();
   $('picked').textContent = f.length
-    ? `${f.length} file(s) selected — ${(f.reduce((s, x) => s + x.size, 0) / 1e6).toFixed(0)} MB`
-    : '';
+    ? `${f.length} file(s) selected — ${(f.reduce((s, x) => s + x.size, 0) / 1e6).toFixed(0)} MB` : '';
 }
 $('folder').addEventListener('change', updatePicked);
 $('file').addEventListener('change', updatePicked);
 
 function setMode(m) {
   mode = m;
-  // Duration is a target for a round trip, but only a preference for A->B:
-  // the router will not detour just to consume time.
   $('minsHint').textContent = m === 'loop' ? 'minutes — target' : 'minutes — preference only';
   $('mLoop').classList.toggle('on', m === 'loop');
   $('mAb').classList.toggle('on', m === 'ab');
-  $('abHint').classList.toggle('hidden', m !== 'ab');
+  $('mHeatmap').classList.toggle('on', m === 'heatmap');
+  $('abPick').classList.toggle('hidden', m === 'loop');
+  $('heatmapControls').classList.toggle('hidden', m !== 'heatmap');
+  $('go').classList.toggle('hidden', m === 'heatmap');
+  $('buildHeatmap').classList.toggle('hidden', m !== 'heatmap');
 }
 $('mLoop').addEventListener('click', () => setMode('loop'));
 $('mAb').addEventListener('click', () => setMode('ab'));
+$('mHeatmap').addEventListener('click', () => setMode('heatmap'));
 
+function setArm(which) {
+  arm = which;
+  $('pickA').classList.toggle('on', which === 'A');
+  $('pickB').classList.toggle('on', which === 'B');
+}
 map.on('click', (e) => {
-  if (mode !== 'ab') return;
-  dest = [e.latlng.lat, e.latlng.lng];
-  if (destMarker) map.removeLayer(destMarker);
-  destMarker = L.circleMarker(e.latlng, {
-    radius: 7, color: '#fff', weight: 2, fillColor: '#f85149', fillOpacity: 1,
-  }).addTo(map);
-  $('destTxt').innerHTML = `<b>${dest[0].toFixed(4)}, ${dest[1].toFixed(4)}</b>`;
+  if (mode !== 'ab' && mode !== 'heatmap') return;
+  const ll = [e.latlng.lat, e.latlng.lng];
+  const txt = `<b>${ll[0].toFixed(4)}, ${ll[1].toFixed(4)}</b>`;
+  if (arm === 'A') {
+    ptA = ll;
+    if (markA) map.removeLayer(markA);
+    markA = L.circleMarker(e.latlng, { radius: 7, color: '#fff', weight: 2,
+      fillColor: '#1c69d4', fillOpacity: 1 }).bindTooltip('A — start').addTo(map);
+    $('txtA').innerHTML = txt;
+    setArm('B');
+  } else {
+    ptB = ll;
+    if (markB) map.removeLayer(markB);
+    markB = L.circleMarker(e.latlng, { radius: 7, color: '#fff', weight: 2,
+      fillColor: '#f85149', fillOpacity: 1 }).bindTooltip('B — end').addTo(map);
+    $('txtB').innerHTML = txt;
+  }
 });
+$('pickA').addEventListener('click', () => setArm('A'));
+$('pickB').addEventListener('click', () => setArm('B'));
 
-$('go').addEventListener('click', () => {
+// Where the rider profile comes from: uploaded telemetry, or one of the
+// bundled example riders. Both have to work for every mode -- picking rider A
+// and then hitting Build Heatmap used to fail, because only the upload path
+// was wired up.
+function submitPlan(heatmap) {
   const files = chosenFiles();
-  if (!files.length) { setStatus('Pick a folder or some files first.', 'err'); return; }
-  if (mode === 'ab' && !dest) { setStatus('Click the map to set a destination.', 'err'); return; }
+  if ((mode === 'ab' || heatmap) && (!ptA || !ptB)) {
+    setStatus('Set both A and B on the map first.', 'err'); return;
+  }
+  if (heatmap && ptA && ptB && ptA[0] === ptB[0] && ptA[1] === ptB[1]) {
+    setStatus('A and B are the same place — move one of them.', 'err'); return;
+  }
+  if (!files.length) {
+    if (exampleRider) {
+      setStatus(`Planning for example rider ${exampleRider}…`);
+      send(`/api/plan/example/${exampleRider}?${params()}`, { method: 'POST' });
+      return;
+    }
+    setStatus('Pick a folder, some files, or a bundled rider first.', 'err'); return;
+  }
   const fd = new FormData();
   for (const f of files) fd.append('files', f);
-  fd.append('mode', mode);
+  fd.append('mode', heatmap ? 'heatmap' : mode);
   fd.append('minutes', $('mins').value);
-  if (mode === 'ab' && dest) { fd.append('dest_lat', dest[0]); fd.append('dest_lon', dest[1]); }
+  if (ptA) { fd.append('origin_lat', ptA[0]); fd.append('origin_lon', ptA[1]); }
+  if (ptB) { fd.append('dest_lat', ptB[0]); fd.append('dest_lon', ptB[1]); }
+  if (heatmap) fd.append('radius_km', $('radius').value);
   setStatus(`Uploading ${files.length} files…`);
-  send('/api/plan/upload', { method: 'POST', body: fd });
-});
+  send(heatmap ? '/api/heatmap' : '/api/plan/upload', { method: 'POST', body: fd });
+}
+$('go').addEventListener('click', () => submitPlan(false));
+$('buildHeatmap').addEventListener('click', () => submitPlan(true));
 
 document.querySelectorAll('.ex').forEach((b) => b.addEventListener('click', () => {
-  if (mode === 'ab' && !dest) { setStatus('Click the map to set a destination.', 'err'); return; }
-  send(`/api/plan/example/${b.dataset.rider}?${params()}`, { method: 'POST' });
+  exampleRider = b.dataset.rider;
+  document.querySelectorAll('.ex').forEach((x) => x.classList.toggle('on', x === b));
+  submitPlan(mode === 'heatmap');
+}));
+
+document.querySelectorAll('.score').forEach((b) => b.addEventListener('click', () => {
+  scoreMode = b.id.replace('score', '').toLowerCase();
+  document.querySelectorAll('.score').forEach((x) => x.classList.toggle('on', x === b));
+  if (plan) { selected = 0; draw(); }
 }));
 
 setMode('loop');
 health();
+$('next').addEventListener('click', () => {
+  if (!plan || !plan.routes.length) return;
+  selected = (selected + 1) % plan.routes.length;
+  draw();
+});

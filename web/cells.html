@@ -1,0 +1,304 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Morton cell router</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<style>
+  :root { --bg:#0d0f12; --panel:#15181d; --line:#262b33; --ink:#e8eaed; --dim:#9aa3ad;
+          --a0:#4da3ff; --a1:#ffc14d; --a2:#ff5d73; }
+  * { box-sizing:border-box; }
+  body { margin:0; font:14px/1.5 system-ui,-apple-system,sans-serif;
+         background:var(--bg); color:var(--ink); display:flex; height:100vh; }
+  #side { width:360px; flex:none; overflow-y:auto; padding:18px;
+          background:var(--panel); border-right:1px solid var(--line); }
+  #map { flex:1; }
+  h1 { font-size:17px; margin:0 0 2px; letter-spacing:-.01em; }
+  .sub { color:var(--dim); font-size:12px; margin-bottom:18px; }
+  code { background:#1d222a; padding:1px 5px; border-radius:4px; font-size:12px; }
+  .stat { display:flex; justify-content:space-between; padding:4px 0;
+          border-bottom:1px solid var(--line); font-size:12.5px; }
+  .stat span:last-child { color:var(--dim); font-variant-numeric:tabular-nums; }
+  fieldset { border:1px solid var(--line); border-radius:8px; margin:16px 0 0; padding:12px; }
+  legend { color:var(--dim); font-size:11px; text-transform:uppercase;
+           letter-spacing:.08em; padding:0 5px; }
+  label { display:block; font-size:12px; color:var(--dim); margin:9px 0 3px; }
+  input[type=range] { width:100%; accent-color:var(--a0); }
+  button { width:100%; margin-top:12px; padding:9px; border:0; border-radius:7px;
+           background:var(--a0); color:#06101c; font-weight:650; font-size:13px;
+           cursor:pointer; }
+  button.ghost { background:#252b34; color:var(--ink); }
+  button:disabled { opacity:.5; cursor:default; }
+  .card { border:1px solid var(--line); border-radius:8px; padding:10px 11px;
+          margin-top:10px; }
+  .card b { font-size:13px; }
+  .swatch { display:inline-block; width:9px; height:9px; border-radius:2px;
+            margin-right:6px; vertical-align:middle; }
+  .kpi { display:flex; justify-content:space-between; font-size:11.5px;
+         color:var(--dim); padding:1.5px 0; }
+  .kpi b { color:var(--ink); font-weight:600; font-variant-numeric:tabular-nums; }
+  .note { font-size:11.5px; color:var(--dim); margin-top:12px; line-height:1.5; }
+  .warn { color:#ffb4a2; }
+  select { width:100%; padding:7px 8px; border-radius:7px; background:#1d222a;
+           color:var(--ink); border:1px solid var(--line); font-size:13px; }
+  #mapstatus { display:none; margin-top:8px; color:#ffb4a2; }
+  /* Route colours are tuned for a dark basemap; on a light one they need a
+     casing to stay readable over terrain shading. */
+  body.lightmap .leaflet-overlay-pane path { paint-order:stroke;
+       stroke-linejoin:round; }
+  body.lightmap .leaflet-overlay-pane { filter:drop-shadow(0 0 2px rgba(0,0,0,.55)); }
+</style>
+
+<div id="side">
+  <h1>Morton cell router</h1>
+  <div class="sub">The original algorithm. The crowd is the map.</div>
+
+  <div id="stats"></div>
+
+  <fieldset>
+    <legend>Basemap</legend>
+    <select id="basemap"></select>
+    <div class="note" id="mapstatus"></div>
+  </fieldset>
+
+  <fieldset>
+    <legend>The rider</legend>
+    <label>Lean ceiling (p95) — <b id="leanV">35</b>°</label>
+    <input type="range" id="lean" min="10" max="50" value="35" step="1">
+    <div class="note">A hard exclusion, not a penalty. Squares the crowd rides
+      beyond this leave the graph entirely.</div>
+  </fieldset>
+
+  <fieldset>
+    <legend>Geometry</legend>
+    <label><input type="radio" name="eng" value="roads" checked> Real roads (OSM)</label>
+    <label><input type="radio" name="eng" value="cells"> Square lattice</label>
+    <div class="note">Same distortion, same morton-cell scores in both. Only
+      where the line is <i>drawn</i> changes — the lattice joins square centres,
+      so it staircases and can cut across fields.</div>
+  </fieldset>
+
+  <fieldset>
+    <legend>Mode 1 — A to B</legend>
+    <div class="note">Click the map to set <b>start</b>, then <b>goal</b>.</div>
+    <button id="go" disabled>Route A → B</button>
+    <button id="reset" class="ghost">Clear points</button>
+  </fieldset>
+
+  <fieldset>
+    <legend>Mode 2 — joyride</legend>
+    <label>Budget — <b id="minV">90</b> min</label>
+    <input type="range" id="min" min="30" max="300" value="90" step="10">
+    <label style="margin-top:10px"><input type="checkbox" id="escape" checked>
+      Escape the city first</label>
+    <div class="note">Fades α out where junctions are dense, so the ride takes
+      the quickest way out of town, saves the detour budget for the countryside,
+      and comes home. One search, not three.</div>
+    <button id="loop" disabled>Loop from start</button>
+  </fieldset>
+
+  <div id="out"></div>
+  <div class="note" id="foot"></div>
+</div>
+<div id="map"></div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+const COLORS = ['#4da3ff', '#ffc14d', '#ff5d73'];
+const map = L.map('map', { zoomControl: true }).setView([47.95, 11.45], 10);
+
+// Basemap with automatic fallback. A tile key can be absent, expired, or
+// Referer-scoped to an origin this page is not served from -- in every one of
+// those cases the tiles just silently fail to paint and the map looks broken.
+// So: try each layer in order, and if one throws enough tile errors to be
+// clearly dead, drop to the next. The last two need no key at all, so there is
+// always something to draw.
+let base = null, layerDefs = [], layerIdx = 0;
+
+function useLayer(i, manual) {
+  if (i >= layerDefs.length) return;
+  layerIdx = i;
+  const def = layerDefs[i];
+  if (base) map.removeLayer(base);
+  let errors = 0;
+  base = L.tileLayer(def.url, {
+    maxZoom: 19, attribution: def.attribution, crossOrigin: true
+  });
+  base.on('tileerror', () => {
+    // A handful of misses is normal at the edge of coverage; a dead key fails
+    // every tile at once.
+    if (++errors === 6 && !manual && i + 1 < layerDefs.length) {
+      setStatus(`${def.name} tiles failed — falling back to ${layerDefs[i + 1].name}`);
+      useLayer(i + 1);
+    }
+  });
+  base.addTo(map);
+  base.bringToBack();
+  document.body.classList.toggle('lightmap', !def.dark);
+  if (coveragePoints.length) drawCoverage();
+  const sel = $('basemap');
+  if (sel) sel.value = def.id;
+}
+
+// Coverage has to be recoloured per basemap: a pale green that reads well on
+// a dark tile disappears completely into terrain shading on the light ones.
+let coveragePoints = [];
+
+function drawCoverage() {
+  layers.coverage.clearLayers();
+  const dark = layerDefs[layerIdx] ? layerDefs[layerIdx].dark : true;
+  const color = dark ? '#5ad1a0' : '#0a6b4a';
+  for (const [lat, lon, trips] of coveragePoints) {
+    L.circleMarker([lat, lon], {
+      radius: dark ? 1.6 : 1.9, weight: 0, fillColor: color,
+      fillOpacity: Math.min((dark ? 0.12 : 0.30) + trips / 60, dark ? 0.65 : 0.85),
+      interactive: false
+    }).addTo(layers.coverage);
+  }
+}
+
+function setStatus(msg) {
+  const el = $('mapstatus');
+  if (el) { el.textContent = msg || ''; el.style.display = msg ? 'block' : 'none'; }
+}
+
+const layers = { coverage: L.layerGroup().addTo(map), routes: L.layerGroup().addTo(map),
+                 pins: L.layerGroup().addTo(map) };
+let start = null, goal = null;
+
+const $ = id => document.getElementById(id);
+const engine = () => document.querySelector('input[name=eng]:checked').value;
+const fmt = n => (Math.round(n * 10) / 10).toLocaleString();
+
+async function j(url, body) {
+  const r = await fetch(url, body ? {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(body)
+  } : {});
+  if (!r.ok) throw new Error((await r.json()).detail || r.statusText);
+  return r.json();
+}
+
+(async function boot() {
+  try {
+    const mc = await j('/api/mapconfig');
+    layerDefs = mc.layers;
+    $('basemap').innerHTML = layerDefs
+      .map(l => `<option value="${l.id}">${l.name}</option>`).join('');
+    $('basemap').onchange = e =>
+      useLayer(layerDefs.findIndex(l => l.id === e.target.value), true);
+    useLayer(0);
+  } catch (e) {
+    layerDefs = [{ id: 'osm', name: 'OSM',
+      url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+      attribution: '&copy; OpenStreetMap contributors', dark: false }];
+    useLayer(0);
+    setStatus('Map config unavailable — using plain OpenStreetMap.');
+  }
+  try {
+    const h = await j('/api/cells/health');
+    $('stats').innerHTML = [
+      ['Ridden squares', h.squares.toLocaleString()],
+      ['Observed transitions', h.transitions.toLocaleString()],
+      ['Square size', '~102 m (level ' + h.level + ')'],
+      ['Squares with a choice', h.branching_pct + '%'],
+    ].map(([k, v]) => `<div class="stat"><span>${k}</span><span>${v}</span></div>`).join('');
+    $('foot').innerHTML = `Only ${h.branching_pct}% of squares offer any onward
+      choice — the rest are chain links. That is why α moves a long A→B route
+      so little, and it is the argument for scoring road segments instead.`;
+
+    const c = await j('/api/cells/coverage?limit=14000&min_trips=3');
+    coveragePoints = c.points;
+    drawCoverage();
+  } catch (e) {
+    $('stats').innerHTML = `<div class="note warn">${e.message}</div>`;
+  }
+})();
+
+function pin(latlng, label, color) {
+  L.circleMarker(latlng, { radius: 7, weight: 2, color, fillColor: '#0d0f12',
+                           fillOpacity: 1 }).addTo(layers.pins).bindTooltip(label);
+}
+
+map.on('click', e => {
+  const p = [e.latlng.lat, e.latlng.lng];
+  if (!start) { start = p; pin(p, 'Start', '#5ad1a0'); }
+  else if (!goal) { goal = p; pin(p, 'Goal', '#ff5d73'); }
+  $('go').disabled = !(start && goal);
+  $('loop').disabled = !start;
+});
+
+$('reset').onclick = () => {
+  start = goal = null;
+  layers.pins.clearLayers(); layers.routes.clearLayers();
+  $('out').innerHTML = ''; $('go').disabled = $('loop').disabled = true;
+};
+$('lean').oninput = e => $('leanV').textContent = e.target.value;
+$('min').oninput = e => $('minV').textContent = e.target.value;
+
+function draw(routes, extra) {
+  layers.routes.clearLayers();
+  if (!routes.length) {
+    $('out').innerHTML = `<div class="card note warn">No route.
+      ${extra || ''}</div>`;
+    return;
+  }
+  const cards = [];
+  routes.forEach((r, i) => {
+    const color = COLORS[i % 3];
+    L.polyline(r.coords, { color: '#0d0f12', weight: 7, opacity: 0.5 })
+      .addTo(layers.routes);
+    L.polyline(r.coords, { color, weight: 4, opacity: 0.95 }).addTo(layers.routes);
+    const k = r.kpis;
+    cards.push(`<div class="card">
+      <b><span class="swatch" style="background:${color}"></span>${r.label}</b>
+      ${r.alpha !== undefined ? ` <code>α ${r.alpha}</code>` : ''}
+      ${r.bearing !== undefined ? ` <code>${r.bearing}°</code>` : ''}
+      <div class="kpi"><span>distance</span><b>${fmt(k.km)} km</b></div>
+      <div class="kpi"><span>time</span><b>${fmt(k.minutes)} min</b></div>
+      <div class="kpi"><span>value</span><b>${k.value}</b></div>
+      <div class="kpi"><span>risk</span><b>${k.risk}</b></div>
+      <div class="kpi"><span>mean lean</span><b>${k.mean_lean_deg}°</b></div>
+      <div class="kpi"><span>climb</span><b>${fmt(k.elev_gain_m)} m</b></div>
+      ${k.crowd_covered_pct !== undefined ?
+        `<div class="kpi"><span>crowd coverage</span><b>${k.crowd_covered_pct}%</b></div>` : ''}
+      ${r.value_thirds ? `<div class="kpi"><span>value out / middle / back</span>
+        <b>${r.value_thirds[0]} · <span style="color:#5ad1a0">${r.value_thirds[1]}</span> · ${r.value_thirds[2]}</b></div>
+        <div class="kpi"><span>in town</span><b>${Math.round(r.urban_share * 100)}%</b></div>` : ''}
+      ${r.roads && r.roads.length ?
+        `<div class="kpi" style="display:block;margin-top:5px">via ${r.roads.slice(0,4).join(' · ')}</div>` : ''}
+    </div>`);
+  });
+  $('out').innerHTML = (extra ? `<div class="note">${extra}</div>` : '') + cards.join('');
+  map.fitBounds(L.polyline(routes[0].coords).getBounds(), { padding: [40, 40] });
+}
+
+async function run(btn, fn) {
+  btn.disabled = true; const t = btn.textContent; btn.textContent = 'Routing…';
+  try { await fn(); } catch (e) { $('out').innerHTML =
+    `<div class="card note warn">${e.message}</div>`; }
+  btn.textContent = t; btn.disabled = false;
+}
+
+$('go').onclick = () => run($('go'), async () => {
+  const d = await j('/api/cells/route',
+    { start, goal, lean_p95: +$('lean').value, engine: engine() });
+  draw(d.routes, `Hard safety gate removed <b>${d.excluded_squares.toLocaleString()}</b>
+    squares for a ${d.lean_p95}° rider.` +
+    (d.routes.length ? '' : ' Every road connecting these two points is beyond ' +
+     'this rider&rsquo;s lean — that is the exclusion working, not a missing feature.'));
+});
+
+$('loop').onclick = () => run($('loop'), async () => {
+  const d = await j('/api/cells/joyride',
+    { origin: start, minutes: +$('min').value, lean_p95: +$('lean').value,
+      engine: engine(), escape: $('escape').checked });
+  const t = d.routes[0];
+  const note = t && t.value_thirds
+    ? `Origin urbanness <b>${d.origin_urban}</b>. ` +
+      (t.escaped_town ? 'Turnarounds are out of town.'
+                      : '<span class="warn">No rural turnaround inside this ' +
+                        'budget — every option stays in the suburbs. Give it ' +
+                        'more time.</span>')
+    : '';
+  draw(d.routes, note);
+});
+</script>

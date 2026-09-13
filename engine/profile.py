@@ -25,6 +25,49 @@ TASTE_FEATURES = ("curviness", "leaned_share", "speed_mean", "band_share", "elev
 
 # Safety margin on top of the rider's demonstrated style (section 6, channel 2).
 CAPABILITY_MARGIN = 1.15
+BIKE_MARGIN = {"sport": 1.25, "roadster": 1.15, "tourer / adventure": 1.05}
+
+
+def _percentile(values: list[float], q: float) -> float:
+    values = sorted(float(v) for v in values if v is not None)
+    if not values:
+        return 0.0
+    index = min(len(values) - 1, max(0, int(round(q * (len(values) - 1)))))
+    return values[index]
+
+
+def _weighted_percentile(values: list[tuple[float, float]], q: float) -> float:
+    values = sorted((float(v), max(float(w), 0.0)) for v, w in values
+                    if v is not None and w > 0)
+    if not values:
+        return 0.0
+    target = sum(w for _, w in values) * q
+    acc = 0.0
+    for value, weight in values:
+        acc += weight
+        if acc >= target:
+            return value
+    return values[-1][0]
+
+
+EXPERIENCE_GATES = (
+    (0.4, "novice", 3.0),
+    (0.65, "intermediate", 5.0),
+    (0.85, "advanced", 8.0),
+    (float("inf"), "expert", 10.0),
+)
+
+
+def _experience_level(score: float) -> tuple[str, float]:
+    for ceiling, level, alpha_max in EXPERIENCE_GATES:
+        if score < ceiling:
+            return level, alpha_max
+    return "expert", 10.0
+
+
+WEATHER_FACTOR_DEFAULT = 1.0
+
+
 
 
 def _q(con, sql: str, params=None):
@@ -155,7 +198,8 @@ def _crowd_baseline(segments: list[dict]) -> dict:
 
 
 def build_profile(paths: list[str], segments: list[dict], name: str = "uploaded",
-                  index: dict | None = None) -> dict:
+                  index: dict | None = None,
+                  weather_factor: float = WEATHER_FACTOR_DEFAULT) -> dict:
     """The full three-channel profile."""
     summary = summarise_trips(paths)
     baseline = _crowd_baseline(segments)
@@ -217,6 +261,26 @@ def build_profile(paths: list[str], segments: list[dict], name: str = "uploaded"
     weights = {f: v / tot for f, v in exp.items()}
     overlap_m = total_w
 
+    dists = [(t["dist_m"] or 0) / 1000.0 for t in summary["trips"]]
+
+    # ---- Rider experience --------------------------------------------------
+    # Experience is deliberately a conservative blend of exposure, lean and
+    # road-normalised curviness. It gates the search envelope; it is not a
+    # preference and never substitutes for the hard capability exclusion below.
+    crowd_curviness_p90 = _percentile(
+        [float(s.get("curviness") or 0.0) for s in segments], 0.90)
+    rider_curviness_p90 = _weighted_percentile(
+        [(seg_by_id[sid].get("curviness") or 0.0, weight)
+         for sid, weight in rider_dist.items()], 0.90)
+    crowd_curviness_p90 = max(crowd_curviness_p90, 1e-6)
+    exp_score = (
+        0.3 * math.log1p(sum(dists) / 500.0)
+        + 0.3 * math.log1p(len(summary["trips"]) / 20.0)
+        + 0.2 * (float(summary["lean_p95"] or 0.0) / 35.0)
+        + 0.2 * (rider_curviness_p90 / crowd_curviness_p90)
+    )
+    experience_level, alpha_max = _experience_level(exp_score)
+
     # ---- Channel 2: CAPABILITY -------------------------------------------
     # Raw lean angle conflates road with rider: a cautious rider on a pass
     # out-leans a fast rider on a motorway. So normalise by the road -- compare
@@ -263,8 +327,6 @@ def build_profile(paths: list[str], segments: list[dict], name: str = "uploaded"
     origin = (sum(p[0] for p in best) / len(best), sum(p[1] for p in best) / len(best))
 
     temps = [t["temp_mean"] for t in summary["trips"] if t["temp_mean"]]
-    dists = [(t["dist_m"] or 0) / 1000.0 for t in summary["trips"]]
-
     # Coarse bike class. Bike MODEL is not in the dataset, so this is an
     # inference the rider is expected to confirm in the UI.
     rpm, spd = summary["rpm_mean"], summary["speed_mean"]
@@ -275,6 +337,9 @@ def build_profile(paths: list[str], segments: list[dict], name: str = "uploaded"
         bike_class = "roadster"
     else:
         bike_class = "tourer / adventure"
+    bike_margin = BIKE_MARGIN[bike_class]
+    lean_ceiling = (float(summary["lean_p95"] or 0.0) * bike_margin
+                    / max(style_ratio, 0.3) * float(weather_factor))
 
     return {
         "name": name,
@@ -287,13 +352,18 @@ def build_profile(paths: list[str], segments: list[dict], name: str = "uploaded"
             "rider_mean": rider_mean,
             "crowd_mean": {f: baseline[f][0] for f in TASTE_FEATURES},
         },
+        "experience_level": experience_level,
+        "experience_score": round(exp_score, 3),
+        "alpha_max": alpha_max,
+        "lean_ceiling": round(lean_ceiling, 2),
         "capability": {
             "lean_p90": summary["lean_p90"],
             "lean_p95": summary["lean_p95"],
             "lean_p99": summary["lean_p99"],
             "style_ratio": style_ratio,
             "style_basis_cells": style_basis,
-            "margin": CAPABILITY_MARGIN,
+            "margin": bike_margin,
+            "lean_ceiling": round(lean_ceiling, 2),
         },
         "context": {
             "origin": {"lat": origin[0], "lon": origin[1]},

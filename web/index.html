@@ -9,7 +9,7 @@
 </head>
 <body>
 <header>
-  <div class="brand"><b>BMW</b> RIDE PLANNER <span class="tag">scenic score only</span></div>
+  <div class="brand"><b>BMW</b> RIDE PLANNER <span class="tag">scenic · fun · personal</span></div>
   <div id="health" class="muted">checking…</div>
 </header>
 
@@ -44,16 +44,41 @@
       <div class="seg">
         <button id="mLoop" class="mode on">Round trip</button>
         <button id="mAb" class="mode">Point to point</button>
+        <button id="mHeatmap" class="mode">X → Y heatmap</button>
       </div>
       <label class="row" for="mins">
         <span>How long <span class="muted" id="minsHint">minutes</span></span>
         <input type="number" id="mins" min="15" max="480" step="15" value="120">
       </label>
-      <div id="abHint" class="muted hidden">
-        Click the map to drop a destination.
-        <span id="destTxt"></span>
+      <div id="heatmapControls" class="hidden">
+        <label class="row" for="radius">
+          <span>Radius <span class="muted">maximum detour</span></span>
+          <select id="radius">
+            <option value="30">30 km</option>
+            <option value="50">50 km</option>
+            <option value="100" selected>100 km</option>
+          </select>
+        </label>
+        <div class="seg">
+          <button id="scoreScenic" class="score on">Scenic</button>
+          <button id="scoreFun" class="score">Fun</button>
+          <button id="scorePersonal" class="score">Personal</button>
+        </div>
+      </div>
+      <div id="abPick" class="hidden">
+        <div class="seg">
+          <button id="pickA" class="pick on">Set A (start)</button>
+          <button id="pickB" class="pick">Set B (end)</button>
+        </div>
+        <div class="muted">Click the map to place the armed point.</div>
+        <table>
+          <tr><td>A</td><td id="txtA" class="muted">rider's usual start</td></tr>
+          <tr><td>B</td><td id="txtB" class="muted">not set</td></tr>
+        </table>
       </div>
       <button id="go" class="primary">Plan the ride</button>
+      <button id="buildHeatmap" class="primary hidden">Build Heatmap</button>
+      <button id="next" class="hidden">Next best scenic route →</button>
       <div id="status" class="status"></div>
     </section>
 
@@ -65,6 +90,7 @@
     <section class="card hidden" id="routeCard">
       <h2>4 · Routes</h2>
       <div id="routeList"></div>
+      <div id="heatmapLegend" class="legend hidden"></div>
       <div id="kpis"></div>
     </section>
   </aside>
