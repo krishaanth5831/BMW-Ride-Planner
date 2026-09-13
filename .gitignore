@@ -55,6 +55,9 @@ fixtures/weather/
 # Overpass per-tile intermediates; the combined ways_*.json is kept so the demo
 # does not depend on Overpass being reachable.
 fixtures/osm/tile_*.json
+# Copernicus DEM rasters, 89 MB and re-downloadable with precompute/fetch_dem.py.
+# The scenic POI cache is NOT ignored: it is small and Overpass is rate-limited.
+fixtures/dem/
 
 # The BMW dataset itself — 20 GB. Never commit it.
 exd_download/
