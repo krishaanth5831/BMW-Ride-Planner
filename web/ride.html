@@ -476,6 +476,31 @@ button, .btn {
   border: 3px solid var(--ground); box-shadow: 0 0 0 1.5px var(--ink);
 }
 
+/* ---- fog map ---- */
+#map.fogged .leaflet-tile-pane { filter: brightness(.42) saturate(.5); }
+#map .leaflet-tile-pane { transition: filter .35s ease; }
+/* The fog map is a flat-map view by its nature: it is about which roads you
+   have covered, which the globe cannot show at road resolution. So it gets its
+   own stage state rather than borrowing route-active, whose job is the ride. */
+#mapStage.fog-active #globe { opacity: 0; pointer-events: none; }
+#mapStage.fog-active #mapSurface { opacity: 1; pointer-events: auto; }
+.fogbar { height: 6px; border-radius: 99px; background: var(--line);
+          overflow: hidden; margin: 10px 0 7px; }
+.fogbar i { display: block; height: 100%; background: var(--accent);
+            border-radius: 99px; }
+.fogfig { display: flex; align-items: baseline; gap: 8px; }
+.fogfig b { font-family: var(--mono); font-size: 22px; font-weight: 500;
+            letter-spacing: -.02em; }
+.fogfig span { color: var(--ink-dim); font-size: 13px; }
+.target { display: grid; grid-template-columns: 1fr auto; gap: 10px;
+          align-items: baseline; padding: 8px 0; width: 100%; text-align: left;
+          background: none; border: 0; border-top: 1px solid var(--line-soft);
+          color: var(--ink); font-family: var(--sans); cursor: pointer; }
+.target:hover .tn { color: var(--warm); }
+.target .tn { font-weight: 500; font-size: 13.5px; }
+.target .tk { font-family: var(--mono); font-size: 12px; color: var(--ink-faint); }
+.target .tv { font-family: var(--mono); font-size: 12px; color: var(--warm); }
+
 @media (max-width: 900px) {
   body { grid-template-columns: 1fr; grid-template-rows: auto 52dvh; height: auto; padding: 4px; gap: 4px; }
   #panel { border-right: 1px solid var(--line-soft); border-bottom: 1px solid var(--line-soft); }
@@ -544,6 +569,13 @@ button, .btn {
     <p class="sub" id="profSub">Every figure below is measured from your own recorded rides.
       Nothing was asked for and nothing is assumed.</p>
     <div id="prof" class="stack"><div class="skel"></div><div class="skel"></div></div>
+  </section>
+
+  <section id="fogSec">
+    <h2>Where you have not been</h2>
+    <p class="sub">Fog over the road network itself, counted in road-kilometres.
+      The roads you have ridden are lit; the best ones you have not are marked.</p>
+    <div id="fog" class="stack"><div class="skel"></div><div class="skel"></div></div>
   </section>
 </div>
 <main id="mapStage" aria-label="Interactive scenic route map">
@@ -895,6 +927,8 @@ const map = L.map('map', { zoomControl: true, attributionControl: true, zoomSnap
 const mapControls = map.getContainer().querySelector('.leaflet-control-container');
 if (mapControls) $('mapSurface').appendChild(mapControls);
 const layers = {
+  fog: L.layerGroup(),
+  fogTargets: L.layerGroup(),
   poi: L.layerGroup().addTo(map),
   route: L.layerGroup().addTo(map),
   stops: L.layerGroup().addTo(map),
@@ -1541,6 +1575,81 @@ function drawRide(d) {
       ceiling. Ride more angle and they open up.</div>` : ''}`;
 }
 
+/* ----------------------------------------------------------- fog map ---- */
+// Canvas renderer, not SVG: rider A lights up 14,567 road segments and an SVG
+// path per segment makes panning crawl.
+const fogCanvas = L.canvas({ padding: 0.3 });
+let fogShown = false;
+
+function toggleFog(on) {
+  fogShown = on;
+  const m = [layers.fog, layers.fogTargets];
+  m.forEach(l => on ? l.addTo(map) : map.removeLayer(l));
+  // Dim the basemap while the fog is up, so the lit roads read as the subject
+  // rather than as one more line on a busy map.
+  document.getElementById('map').classList.toggle('fogged', on);
+  $('mapStage').classList.toggle('fog-active', on);
+  if (on) {
+    setTimeout(() => map.invalidateSize(), 60);
+    $('mapMode').textContent = 'Explored';
+    $('mapStatus').textContent = 'Lit roads are yours. Amber marks the best you have not ridden';
+  }
+  const b = $('fogToggle');
+  if (b) { b.setAttribute('aria-pressed', String(on));
+           b.textContent = on ? 'Hide the fog map' : 'Show it on the map'; }
+}
+
+async function loadFog(rider) {
+  $('fog').className = 'stack';
+  $('fog').innerHTML = '<div class="skel"></div><div class="skel"></div>';
+  layers.fog.clearLayers();
+  layers.fogTargets.clearLayers();
+  try {
+    const d = await api('/api/ride/fog/' + rider);
+    for (const [a, b, c, e] of d.ridden) {
+      L.polyline([[a, b], [c, e]], {
+        color: '#5eb9f0', weight: 2, opacity: .75, renderer: fogCanvas,
+        interactive: false
+      }).addTo(layers.fog);
+    }
+    for (const t of d.targets) {
+      L.circleMarker([t.lat, t.lon], {
+        radius: 7, color: '#d6a450', weight: 2, fillColor: '#d6a450',
+        fillOpacity: .28, renderer: fogCanvas
+      }).addTo(layers.fogTargets)
+        .bindPopup(`<b>${t.name}</b><br>${t.km} km you have never ridden`);
+    }
+
+    $('fog').className = '';
+    $('fog').innerHTML = `
+      <div class="fogfig"><b class="num">${Math.round(d.ridden_km)}</b>
+        <span>of ${Math.round(d.network_km).toLocaleString()} km ridden</span></div>
+      <div class="fogbar"><i style="width:${d.pct}%"></i></div>
+      <div class="legend">${d.pct}% of the good motorcycling road down here.</div>
+      <button class="ghost" id="fogToggle" aria-pressed="false"
+              style="margin-top:12px">Show it on the map</button>
+      <div class="legend" style="margin-top:16px">Best roads you have never ridden</div>
+      <div id="targets"></div>`;
+    $('targets').innerHTML = d.targets.map((t, i) => `
+      <button class="target" data-i="${i}">
+        <span class="tn">${t.name}</span>
+        <span><span class="tk">${t.km} km</span>
+        &nbsp;<span class="tv">${t.value.toFixed(2)}</span></span>
+      </button>`).join('');
+    for (const b of $('targets').querySelectorAll('.target')) {
+      const t = d.targets[+b.dataset.i];
+      b.onclick = () => {
+        if (!fogShown) toggleFog(true);
+        map.setView([t.lat, t.lon], 13);
+      };
+    }
+    $('fogToggle').onclick = () => toggleFog(!fogShown);
+  } catch (e) {
+    $('fog').className = 'msg bad';
+    $('fog').textContent = e.message;
+  }
+}
+
 /* --------------------------------------------------------------- init ---- */
 async function load(rider) {
   setRiderBike(rider);
@@ -1560,8 +1669,10 @@ async function load(rider) {
   $('ride').className = 'msg'; $('ride').textContent = 'Nothing planned yet.';
   chosen = 0;
   if (globeReady) startIdleGlobeTour();
+  toggleFog(false);
   await loadProfile(rider);
   await loadWeather(rider);
+  loadFog(rider);          // independent of the ride; do not block on it
 }
 $('riderSel').onchange = e => load(e.target.value);
 load('A');

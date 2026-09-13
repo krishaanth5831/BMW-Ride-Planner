@@ -574,6 +574,7 @@ if os.path.isdir(WEB):
 # view of the same machinery.
 # ---------------------------------------------------------------------------
 
+from engine import fog as _fog  # noqa: E402
 from engine import rider_profile as _profile  # noqa: E402
 from engine import rideworthy as _weather  # noqa: E402
 from engine import scenic as _scenic  # noqa: E402
@@ -712,6 +713,26 @@ def ride_suggest(body: dict):
                      "visited", "value_thirds", "urban_share",
                      "personalization", "spot_search")}],
     }
+
+
+@app.get("/api/ride/fog/{rider}")
+def ride_fog(rider: str, targets: int = 8):
+    """Which roads this rider has ridden, and the best ones they have not.
+
+    Counted in road-kilometres rather than grid squares, per plan/UI.md
+    section 5: "You have ridden 214 km of the 5,045 km down here" is a
+    sentence a rider feels; a percentage of squares is not.
+    """
+    p = get_profile(rider)
+    g = get_road_graph()
+    cg = get_cell_graph()
+    cost = _croads.RoadCost(
+        g, _cells.Cost(cg, _cells.Rider(cg, ridden=p.get("ridden_squares"),
+                                        lean_p95=p.get("lean_ceiling") or 35.0)))
+    out = _fog.build(g, cost, p.get("ridden_squares"), n_targets=targets)
+    out["rider"] = rider.upper()
+    out["home"] = p.get("home")
+    return out
 
 
 @app.get("/api/ride/pois")
