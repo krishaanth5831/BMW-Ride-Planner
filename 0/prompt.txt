@@ -1,0 +1,21 @@
+commit push everything and then pr to main
+
+---
+
+start a dev server
+
+---
+
+what are some unique features we can add to this
+
+---
+
+build the fog map
+
+---
+
+the fog map is a bit buggy when i plan routes, and in the fog map make the roads that you have already ridden green regardless of if its scenic or not and specifically scenic road you have not ridden should be in red and prompt the user asking him if he wants to discover new places today
+
+---
+
+no need to have the whole fog map but add points of interest on all the red areas you identified on the fog map and try to use that when coming up with a ride because then there ends up being better rides
