@@ -1571,7 +1571,11 @@ function renderRideDetails(d, r) {
   $('rideSub').textContent = d.kind === 'scenic-chain'
     ? (d.demo_mode ? 'Profile-matched route on real OSM roads with neutral crowd scoring.'
                    : 'Out of town first, then the part you came for, then home.')
-    : 'No scenic chain fitted this budget, so here is the best loop instead.';
+    : d.overlap_relaxed
+      ? 'No scenic chain fitted, and no loop stayed under the usual overlap '
+        + 'limit either. This is the closest one: it doubles back on itself '
+        + 'more than we would normally offer.'
+      : 'No scenic chain fitted this budget, so here is the best loop instead.';
   $('ride').className = '';
   $('ride').innerHTML = `
     <div class="ride-name">${r.label}</div>

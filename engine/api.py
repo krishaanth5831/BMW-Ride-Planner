@@ -678,27 +678,42 @@ def ride_suggest(body: dict):
         seed=body.get("seed"))
 
     if not got["routes"]:
-        # Fall back to the bearing joyride rather than showing nothing -- and
-        # say which one the rider is looking at.
+        # Fall back to the bearing joyride rather than showing nothing.
         #
-        # Note the fallback is seed-INVARIANT, and cannot honestly be made
-        # otherwise here: for rider A at 150 minutes exactly one loop clears
-        # the 10% overlap cap, so there is nothing to choose between. Jittering
-        # alpha was tried and changes nothing. Making this vary means either
-        # relaxing that cap or fixing the chain, not adding randomness.
-        loops = _croads.joyride(g, cost, origin, minutes,
-                                alpha=float(body.get("alpha", 3.0)))
+        # "Rather than showing nothing" was not actually true. rank_loop_fallbacks
+        # drops every loop that retraces more than 10% of itself, and when none
+        # clears that bar it returns an empty list -- which this endpoint then
+        # handed back as routes: [], so the page showed no ride at all. It
+        # happened on roughly half of rider A's asks, because their 19.3 degree
+        # lean ceiling removes 1,116 segments and the chain misses more often.
+        #
+        # A quality bar is right; returning nothing is not. If no loop clears
+        # it, the best one still gets offered, labelled honestly as sharing
+        # more road than usual, so the rider can judge it.
+        raw = _croads.joyride(g, cost, origin, minutes,
+                              alpha=float(body.get("alpha", 3.0)))
         loops = _scenic.rank_loop_fallbacks(
-            loops, get_scenic_index(),
+            list(raw), get_scenic_index(),
             rider if rider in _scenic.RIDER_TYPES else "A",
             minutes, p, body.get("seed"))
+        relaxed = False
+        if not loops and raw:
+            relaxed = True
+            loops = [min(raw, key=lambda r: r.get("overlap", 1.0))]
+            loops[0]["visited"] = get_scenic_index().visited_by(loops[0]["coords"])
         if loops:
             from engine import terrain as _terrain
             _terrain.enrich_route(loops[0], body.get("terrain", True) is not False)
+        reason = got.get("reason")
+        if relaxed:
+            reason = ((reason + " ") if reason else "") + (
+                "No loop stayed under the usual overlap limit either, so this "
+                "one shares more road with itself than we would normally offer.")
         return {"rider": rider, "minutes": minutes, "kind": "loop",
                 "origin": list(g.node_pos(origin)),
-                "reason": got.get("reason"),
-                "routes": [{k: r[k] for k in
+                "reason": reason,
+                "overlap_relaxed": relaxed,
+                "routes": [{k: r.get(k) for k in
                             ("label", "bearing", "coords", "kpis", "roads",
                              "value_thirds", "urban_share", "overlap", "visited",
                              "personalization", "spot_search")} for r in loops]}
