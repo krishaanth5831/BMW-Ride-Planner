@@ -122,6 +122,41 @@ def targets(g: RoadGraph, cost: RoadCost, ridden: set[int], n: int = 8) -> list[
     return (named + [t for t in out if t["name"] == "Unnamed road"])[:n]
 
 
+def unridden_pois(g: RoadGraph, cost: RoadCost, ridden: set[int],
+                  limit: int = 60) -> list[dict]:
+    """The good unridden roads, shaped as POIs the ride planner can use.
+
+    This is the fog map turned into something actionable. A red road on a
+    coverage overlay is information; the same road as a candidate DESTINATION
+    is a better ride, because the planner then has a reason to go somewhere the
+    rider has not been instead of round the same lakes again.
+
+    Emitted in the same shape as the Overpass POIs so they go through
+    ScenicIndex unchanged and pick up all of its enrichment -- snapping, rider
+    affinity, scenic scoring -- with no special case downstream.
+
+    `weight` is what the chain builder ranks on, and Overpass POIs sit in
+    1.0 to 1.8. An unridden road is mapped into the same range from its own
+    road score, with a novelty bonus on top: being new is itself worth
+    something, which is the "new terrain" term plan/ALGORITHM.md section 6
+    asks for and nothing else in the planner currently supplies.
+    """
+    out = []
+    for t in targets(g, cost, ridden, n=limit):
+        # value runs roughly .45 to .70 on this network; stretch that onto the
+        # POI weight scale rather than inventing a second one.
+        scenic = max(0.0, min(1.0, (t["value"] - 0.45) / 0.25))
+        out.append({
+            "name": t["name"],
+            "kind": "unridden",
+            "lat": t["lat"], "lon": t["lon"],
+            "weight": round(1.15 + 0.65 * scenic, 3),   # (*) novelty floor
+            "km_unridden": t["km"],
+            "road_value": t["value"],
+        })
+    return out
+
+
 def lines(g: RoadGraph, seg_ids, simplify: bool = True) -> list:
     """Compact wire format: one [lat1, lon1, lat2, lon2] per segment.
 
@@ -169,8 +204,6 @@ def build(g: RoadGraph, cost: RoadCost, squares, n_targets: int = 8) -> dict:
     scenic, cut = scenic_unridden(g, cost, ridden)
     return {
         **cov,
-        "ridden": lines(g, sorted(ridden)),
-        "scenic_unridden": lines(g, scenic),
         "scenic_cutoff": round(cut, 3),
         "scenic_unridden_km": round(_km(g, scenic), 1),
         "targets": targets(g, cost, ridden, n_targets),

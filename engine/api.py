@@ -579,7 +579,7 @@ from engine import rider_profile as _profile  # noqa: E402
 from engine import rideworthy as _weather  # noqa: E402
 from engine import scenic as _scenic  # noqa: E402
 
-_ride_state: dict = {"index": None, "profiles": {}}
+_ride_state: dict = {"index": None, "profiles": {}, "rider_index": {}}
 
 RIDERS = {"A": "exampleUserA", "B": "exampleUserB", "C": "exampleUserC"}
 
@@ -663,7 +663,7 @@ def ride_suggest(body: dict):
     origin = g.nearest_node(*origin_ll)
 
     got = _scenic.plan_scenic_loop(
-        g, cost, get_scenic_index(), origin, minutes,
+        g, cost, get_rider_index(rider), origin, minutes,
         alpha=float(body.get("alpha", 3.0)),
         max_stops=int(body.get("max_stops", 3)),
         south_bias=body.get("south_bias"),
@@ -677,7 +677,7 @@ def ride_suggest(body: dict):
         loops = _croads.joyride(g, cost, origin, minutes,
                                 alpha=float(body.get("alpha", 3.0)))
         loops = _scenic.rank_loop_fallbacks(
-            loops, get_scenic_index(),
+            loops, get_rider_index(rider),
             rider if rider in _scenic.RIDER_TYPES else "A",
             minutes, p, body.get("seed"))
         if loops:
@@ -713,6 +713,49 @@ def ride_suggest(body: dict):
                      "visited", "value_thirds", "urban_share",
                      "personalization", "spot_search")}],
     }
+
+
+def _rider_cost(g, p, weather: float = 0.0, escape: bool = True):
+    cg = get_cell_graph()
+    return _croads.RoadCost(
+        g, _cells.Cost(cg, _cells.Rider(cg, ridden=p.get("ridden_squares"),
+                                        lean_p95=p.get("lean_ceiling") or 35.0),
+                       weather),
+        escape=escape)
+
+
+def get_rider_index(rider: str):
+    """Scenic POIs plus the good roads THIS rider has never ridden.
+
+    The fog map's red roads are more useful as destinations than as an
+    overlay: giving the planner a reason to go somewhere new is what stops it
+    offering the same lakes every time. They are snapped through the same
+    ScenicIndex as the Overpass POIs, so nothing downstream needs a special
+    case -- only the candidate list gets longer and more personal.
+
+    Cached per rider: snapping is a brute-force nearest-node sweep, and the
+    answer only changes when the rider rides somewhere new.
+    """
+    rider = rider.upper()
+    if rider not in _ride_state["rider_index"]:
+        g = get_road_graph()
+        base = get_scenic_index()
+        p = get_profile(rider)
+        ridden = _fog.ridden_segments(g, p.get("ridden_squares"))
+        extra = _fog.unridden_pois(g, _rider_cost(g, p), ridden)
+        idx = _scenic.ScenicIndex(g, extra)
+        # ScenicIndex partitions the public POIs between the three rider
+        # styles, so each rider only sees its own share. These are not public
+        # POIs: they are derived from THIS rider's own coverage and belong to
+        # them, so they are stamped accordingly instead of falling to the "A"
+        # default and vanishing for everyone else.
+        for item in idx.pois:
+            item["rider_style_owner"] = rider
+        merged = _scenic.ScenicIndex.__new__(_scenic.ScenicIndex)
+        merged.g = g
+        merged.pois = list(base.pois) + list(idx.pois)
+        _ride_state["rider_index"][rider] = merged
+    return _ride_state["rider_index"][rider]
 
 
 @app.get("/api/ride/fog/{rider}")
@@ -769,7 +812,7 @@ def ride_discover(body: dict):
     # loop is both a better ride and the thing that passes that guard.
     name = body.get("name") or "your new road"
     got = _scenic.plan_scenic_loop(
-        g, cost, get_scenic_index(), origin, minutes,
+        g, cost, get_rider_index(rider), origin, minutes,
         alpha=float(body.get("alpha", 3.0)),
         max_stops=int(body.get("max_stops", 2)),
         rider_id=rider if rider in _scenic.RIDER_TYPES else "A",

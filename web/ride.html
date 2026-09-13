@@ -580,8 +580,8 @@ button, .btn {
 
   <section id="fogSec">
     <h2>Where you have not been</h2>
-    <p class="sub">Fog over the road network itself, counted in road-kilometres.
-      The roads you have ridden are lit; the best ones you have not are marked.</p>
+    <p class="sub">Counted in road-kilometres, not grid squares. The best roads
+      still missing from your total become places the planner rides you to.</p>
     <div id="fog" class="stack"><div class="skel"></div><div class="skel"></div></div>
   </section>
 </div>
@@ -1608,7 +1608,7 @@ function toggleFog(on) {
   if (on) {
     setTimeout(() => map.invalidateSize(), 60);
     $('mapMode').textContent = 'Explored';
-    $('mapStatus').textContent = 'Lit roads are yours. Amber marks the best you have not ridden';
+    $('mapStatus').textContent = 'The best roads you have never ridden';
   }
   const b = $('fogToggle');
   if (b) { b.setAttribute('aria-pressed', String(on));
@@ -1622,22 +1622,10 @@ async function loadFog(rider) {
   layers.fogTargets.clearLayers();
   try {
     const d = await api('/api/ride/fog/' + rider);
-    // Green is "you have been here", full stop: a road you have ridden is
-    // yours whether or not it scored well. Red is the opposite claim -- good
-    // road, never ridden -- so the two colours answer different questions and
-    // are never mixed.
-    for (const [a, b, c, e] of d.ridden) {
-      L.polyline([[a, b], [c, e]], {
-        color: '#6fcf97', weight: 2, opacity: .8, renderer: fogCanvas,
-        interactive: false
-      }).addTo(layers.fog);
-    }
-    for (const [a, b, c, e] of (d.scenic_unridden || [])) {
-      L.polyline([[a, b], [c, e]], {
-        color: '#e35f59', weight: 3, opacity: .95, renderer: fogCanvas,
-        interactive: false
-      }).addTo(layers.fog);
-    }
+    // The whole-network overlay is gone. Its job was never to be looked at --
+    // it was to find the good roads this rider has not ridden, and those are
+    // now POIs the planner actually routes to. What is left on the map is the
+    // shortlist itself.
     for (const t of d.targets) {
       L.circleMarker([t.lat, t.lon], {
         radius: 7, color: '#e35f59', weight: 2, fillColor: '#e35f59',
@@ -1653,13 +1641,14 @@ async function loadFog(rider) {
       <div class="fogbar"><i style="width:${d.pct}%"></i></div>
       <div class="legend">${d.pct}% of the good motorcycling road down here.</div>
       <button class="ghost" id="fogToggle" aria-pressed="false"
-              style="margin-top:12px">Show it on the map</button>
+              style="margin-top:12px">Show them on the map</button>
 
       <div class="discover">
         <div class="dq">Fancy somewhere new today?</div>
         <div class="legend">There are
           <b class="num">${Math.round(d.scenic_unridden_km || 0)} km</b> of good
-          road down here you have never been down. They are the red ones.</div>
+          road down here you have never been down. The planner now treats the
+          best of them as places to ride to.</div>
         <button class="primary" id="discoverBtn"
                 style="margin-top:12px">Show me somewhere new</button>
       </div>

@@ -116,10 +116,17 @@ def _poi_rider_affinity(graph: RoadGraph, poi: dict) -> dict[str, float]:
     scenery = _clamp01((float(poi.get("weight") or 1.0) - 1.0) / 0.8)
     access = 1.0 - _clamp01(float(poi.get("snap_distance_m") or 0.0) / 2_500.0)
     kind = poi.get("kind")
+    # "unridden" is a road this rider has never been down, injected from the
+    # fog map. It scores high for everyone on purpose: somewhere new is the
+    # one thing a rider cannot get from a route they have already done, and
+    # without this it would take the 0.6 default and never be chosen.
     kind_fit = {
-        "A": {"lake": 1.0, "viewpoint": .82, "pass": .62, "peak": .68},
-        "B": {"lake": .52, "viewpoint": .78, "pass": 1.0, "peak": .86},
-        "C": {"lake": .75, "viewpoint": .86, "pass": .96, "peak": .92},
+        "A": {"lake": 1.0, "viewpoint": .82, "pass": .62, "peak": .68,
+              "unridden": .92},
+        "B": {"lake": .52, "viewpoint": .78, "pass": 1.0, "peak": .86,
+              "unridden": .90},
+        "C": {"lake": .75, "viewpoint": .86, "pass": .96, "peak": .92,
+              "unridden": .94},
     }
     road_classes = {s.get("highway") for s in segments}
     tourer_road = (1.0 if road_classes & {"secondary", "tertiary"} else
@@ -142,8 +149,8 @@ def _poi_rider_affinity(graph: RoadGraph, poi: dict) -> dict[str, float]:
 
 def _objective_scenic_score(graph: RoadGraph, poi: dict) -> float:
     """A rider-independent 1–10 scenic score from bundled OSM attributes."""
-    kind = {"lake": 1.0, "pass": .96, "peak": .90,
-            "viewpoint": .84}.get(poi.get("kind"), .6)
+    kind = {"lake": 1.0, "pass": .96, "peak": .90, "viewpoint": .84,
+            "unridden": .88}.get(poi.get("kind"), .6)
     weight = _clamp01((float(poi.get("weight") or 1.0) - 1.0) / .8)
     rural = 1.0 - graph.urban_of_node(poi["node"])
     score = 1.0 + 9.0 * (.58 * kind + .27 * weight + .15 * rural)
