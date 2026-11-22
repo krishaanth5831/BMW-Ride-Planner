@@ -4,132 +4,171 @@ A ride planner built for motorcyclists, not for commuters.
 
 Most routing software answers *"what is the fastest way from A to B?"* That is
 the wrong question for a rider on a Sunday morning. This answers a different
-one: **what is the best ride I can have today?**
+one: **what is the best ride I can have today?** It picks a weather window,
+works out what this rider is capable of from their own telemetry, and routes
+along roads that are twisty, scenic and free-flowing, while never sending them
+onto roads the crowd rides harder than they do.
 
-Built for the **BMW Motorrad track** at the TUM.ai Zurich hackathon.
-Design docs live in [`plan/`](plan/) — start with
-[`plan/ALGORITHM.md`](plan/ALGORITHM.md).
+Built in one weekend for the **BMW Motorrad track ("FIND YOUR THRILL — Route
+Challenge") at the TUM.ai hackathon in Zurich**, pitched on 2026-09-13.
+It is a hackathon project: it runs and demos well, but it is not maintained
+as a product.
+
+- [`DEMO.md`](DEMO.md): the five-minute pitch walkthrough
+- [`plan/`](plan/): design docs, start with [`plan/ALGORITHM.md`](plan/ALGORITHM.md)
+- [`PERFORMANCE.md`](PERFORMANCE.md): caching work and the full-dataset import
+- [`MORTON_ROUTER.md`](MORTON_ROUTER.md): the original "morton square" router, kept for comparison at `/cells`
 
 ---
 
-## What works today
+## Quick start (no dataset, no installs)
 
-Upload a rider's telemetry (a whole folder, individual files, or a zip) and get
-routes back, on either **round trip** or **point to point**.
+You need Python 3 (developed on 3.12, also runs on 3.14). Nothing else: the
+quick demo uses only the standard library.
 
-Legacy round-trip and point-to-point planning remains scenic-first. X→Y heatmap mode adds percentile-scaled fun and a profile-personal score while retaining capability as a hard exclusion.
-The rider profile is still used, but only for things that are not preferences:
-the capability ceiling (a hard exclusion), the start point, and the default ride
-length.
+```bash
+git clone https://github.com/krishaanth5831/BMW-Ride-Planner.git
+cd BMW-Ride-Planner
+python3 -m engine.demo_server --warmup
+```
 
-Everything else is derived from the uploaded data:
+Wait for `BMW Ride Planner ready: http://127.0.0.1:8000/ride`, then open
+<http://127.0.0.1:8000/ride> in your browser.
+
+What you get in this mode:
+
+- Real roads from the committed OpenStreetMap extract (`fixtures/osm/`), Munich
+  south to Tegernsee.
+- Three example riders **A / B / C** with clearly labelled sample values (no
+  BMW telemetry is bundled).
+- A live weather forecast from Open-Meteo (no key needed). Offline, it falls
+  back to bundled sample weather and says so.
+
+`--warmup` builds the road graph, rider profiles and forecasts before the page
+is announced, so the first click is fast. The first run is slower; later runs
+reuse caches in `data/cache/`. Other flags: `--host`, `--port`, `--dataset`,
+`--rider-a`, `--cell-graph` (see below).
+
+Check what the server is actually using at
+<http://127.0.0.1:8000/api/demo/status> (`mode` is `telemetry` when a real
+crowd graph is loaded, `sample` values are labelled per rider).
+
+## The three pages
+
+| Page | Served by | What it is |
+|---|---|---|
+| `/ride` | both servers | The product a rider sees: today's weather window, their profile, a planned ride with named stops, corner and elevation stats |
+| `/cells` | FastAPI only | The engineering view: the morton-square router next to the road router, the raw graph, every number |
+| `/` | FastAPI only | The first planner: upload telemetry, round trip / point to point, and the X→Y heatmap |
+
+The quick-start server (`engine.demo_server`) only serves `/ride`. The
+**post-ride summary** button on `/ride` calls `/api/ride/replay/{rider}`, which
+only the FastAPI app provides.
+
+## Full setup (BMW telemetry)
+
+The telemetry-backed mode needs the BMW hackathon dataset (about 20 GB), which
+was handed out to participants and is **not** in this repo. It is expected at
+`~/Desktop/BMW/exd_download/datasetHackathon`; point elsewhere with
+`BMW_DATASET=/path/to/datasetHackathon`. The folder must contain
+`anonymizedDataLake`, `exampleUserA`, `exampleUserB` and `exampleUserC`.
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate                 # Windows: .venv\Scripts\activate
+python -m pip install -r requirements.txt  # fastapi, python-multipart, uvicorn
+python -m pip install duckdb               # needed by the precompute steps and uploads
+```
+
+### For `/ride`: the crowd graph
+
+```bash
+# Scans every trip once and writes data/cell_graph.json (slow, run it before the demo).
+python -m precompute.build_cell_graph --dataset "$BMW_DATASET" --out data
+
+python -m engine.demo_server --warmup
+```
+
+With the dataset present, riders A/B/C use their real `recordedTrips`
+folders. You can also point one rider at a single folder:
+`--rider-a /path/to/recordedTrips` (or `BMW_RIDER_A`, `BMW_RIDER_B`,
+`BMW_RIDER_C`). A configured folder with no valid trips is an error, never a
+silent switch to sample data.
+
+### For `/` and `/cells`: the road graph and the FastAPI app
+
+```bash
+# 1. Road network from Overpass (~5 min, tiles cached in fixtures/osm/).
+#    Optional: the combined ways_*.json is already committed.
+python -m precompute.fetch_osm
+
+# 2. Split ways at junctions and snap the crowd telemetry onto them (~5 min).
+#    Writes data/segments.json and data/graph.json.
+python -m precompute.build_osm_graph --out data
+
+# 3. Serve the API and all three pages on one port.
+python -m uvicorn engine.api:app --host 127.0.0.1 --port 8000
+```
+
+Open <http://127.0.0.1:8000/>, then upload `.csv` files (a folder, single
+files or a `.zip`) or click **A** / **B** / **C** for a bundled example rider.
+
+Optional extras:
+
+- `python -m precompute.fetch_scenic` refreshes the scenic points (lakes,
+  passes, peaks, viewpoints). The result is already committed in
+  `fixtures/scenic/`.
+- `python -m precompute.fetch_dem` downloads a Copernicus elevation raster for
+  the scenic score's terrain term. It needs `numpy` and free Copernicus Data
+  Space credentials (`COPERNICUS_CLIENT_ID`, `COPERNICUS_CLIENT_SECRET` in
+  `.env`). Without it, the score falls back to the trips' own GPS altitude.
+
+## Configuration
+
+**No API keys are needed.** Copy [`.env.example`](.env.example) to `.env` only
+if you want the optional extras. The FastAPI app reads `.env` itself.
+
+| Variable | Used for |
+|---|---|
+| `BMW_DATASET` | Dataset location (default `~/Desktop/BMW/exd_download/datasetHackathon`) |
+| `BMW_RIDER_A` / `_B` / `_C` | One `recordedTrips` folder for one rider |
+| `BMW_CELL_GRAPH` | Crowd graph file (default `data/cell_graph.json`) |
+| `BMW_CACHE_DIR` | Derived caches (default `data/cache/`) |
+| `STADIA_API_KEY`, `GEOAPIFY_API_KEY` | Nicer basemap tiles; without them the map uses CARTO, then plain OSM |
+| `COPERNICUS_CLIENT_ID`, `COPERNICUS_CLIENT_SECRET` | Only for `precompute.fetch_dem` |
+
+`HERE_API_KEY` / `TOMTOM_API_KEY` appear in `.env.example` for a live-traffic
+layer that was designed but is not wired up; traffic comes from the fleet's own
+observed speeds instead.
+
+## How a ride is chosen
+
+The rider profile is used only for things that are not preferences: the
+capability ceiling (a hard exclusion), the start point, and the default ride
+length. Everything else is derived from the uploaded data:
 
 | Derived | From |
 |---|---|
 | Where the ride starts | the start point of their own most frequent trips |
 | How long it runs | the median duration of their recorded rides |
-| What counts as "good" | revealed preference — which roads they chose, vs the crowd |
+| What counts as "good" | revealed preference: which roads they chose, vs the crowd |
 | What is too much | road-normalised style ratio → a hard capability ceiling |
-| Bike class | rpm-per-km/h, gear count, lean envelope (inferred, confirmable) |
+| Bike class | rpm per km/h, gear count, lean envelope (inferred, confirmable) |
 
-## X→Y heatmap
+**Safety is a hard exclusion, not a penalty.** A road the crowd rides with more
+lean than this rider's own envelope allows is removed from their graph. No
+scenic or fun bonus can buy it back.
 
-Choose **X → Y heatmap** in the UI, click A and B on the map, select a 30/50/100 km detour radius, and build the heatmap. The API is also available at `POST /api/heatmap` (or `/api/plan/heatmap`) with the same telemetry FormData as `/api/plan/upload` plus required `origin_lat/lon` and `dest_lat/lon`. It samples up to 30 distinct routes, scores each for scenic, fun, and personal fit, and returns a segment heatmap where greener lines score higher and thicker lines are used by more candidate routes. Coordinates outside the stored Bavaria bbox return `422` with the bbox in the error metadata.
+Weather windows come from the Open-Meteo forecast and are cached locally. Each
+day is evaluated from three hours before local sunset until one hour after; a
+ride is confirmed when every hourly score passes and no hour is above 30°C.
 
-Heatmap mode looks for the same thing a rider does — a road that keeps turning, with nothing in the way — through three positive cost multipliers. They are multipliers on travel time, so every edge cost stays strictly positive and Dijkstra stays valid.
+Routes use major roads to leave Munich, then ramp in a strong motorway/trunk
+penalty from 20–25 km out from Marienplatz. Those roads stay available when
+they are the only practical connection. Long, straight named roads get an
+extra geometry-based cost outside the same radius.
 
-* **Highways are avoided, not forbidden.** Motorways cost 5×, motorway links 4×, trunks 3×, trunk links 2.5×, primary roads 1× and primary links 0.8×. Nothing is hard-blocked, so when a motorway is the only way to connect X to Y the planner still uses it.
-* **Long uninterrupted roads are penalised.** Each segment carries `road_run_km`, the length of the whole road it belongs to (grouped by OSM way, falling back to the road name), not the length of its own ~100 m chunk. Runs beyond 0.6 km are charged an increasing penalty — but only in proportion to how *un*-twisty they are, so a 14 km alpine pass full of corners is untouched while a 14 km dead-straight Bundesstrasse is expensive.
-* **Repeated twists are preferred.** The twist score blends the crowd's measured lean rhythm with 15 m-resampled road geometry, weighted by how many trips actually cover the segment, so roads nobody has ridden are still judged on their real shape.
-* **Traffic pressure comes from BMW crowd telemetry**, not a live traffic API — observed `crawl_share` and the inverse of `band_share`, blended by trip-count confidence against a road-class prior for roads the crowd has not covered. High traffic raises a road's cost; it never excludes it. No API keys and no extra dependencies.
-* **Capability remains a hard exclusion.** A road demanding more lean than the rider's own envelope allows is removed from the graph outright, and no scenic, twist or traffic bonus can buy it back.
-
-Heatmap routing applies `highway_avoidance=1.0`, `twist_avoidance=2.5` and `traffic_avoidance=2.0`; legacy loop and point-to-point routing leave all three at `0.0` and are unchanged. Each route reports `twist_score`, `twisty_pct`, `traffic_pressure`, `max_road_run_km` and `long_straight_km` alongside the existing scenic, fun, personal, crowd-coverage, junction and elevation KPIs.
-
-## Where the numbers come from
-
-Anything marked **(\*)** in the code is a value **we chose ourselves** — not from
-the BMW dataset, an API, or the brief. Unmarked values are traceable to a named
-source.
-
-> The inputs are measured. The scoring is our opinion.
-
-Lean angle, curviness, observed speed, ABS events, terrain and weather are all
-real measurements. What makes a road *scenic* is a definition we wrote, and
-every weight lives in one file you can argue with. Full inventory:
-[plan/PROVENANCE.md](plan/PROVENANCE.md).
-
-Two things not to overclaim: **junction cost** and **traffic** are currently
-constants standing in for crowd-data measurements that are designed but not yet
-built. Both are marked (\*).
-
-## Quick start
-
-For faster presentation loading and explicit real-data setup, see
-[PERFORMANCE.md](PERFORMANCE.md). Both launchers now support the same
-`BMW_DATASET`, `BMW_RIDER_A/B/C` and `BMW_CELL_GRAPH` configuration.
-
-```bash
-# macOS, Linux, and Windows: no dataset, pip install, or precomputation needed.
-python3 -m engine.demo_server
-```
-
-Before presenting, use `python3 -m engine.demo_server --warmup`. This prepares
-cached graphs, complete rider profiles and weather before announcing readiness.
-The route appears before optional elevation statistics finish loading; they
-update on the same page without rerouting.
-
-Open <http://localhost:8000/ride>. The lightweight mode routes on the committed
-OSM fixture, uses clearly labeled sample rider values, and fetches live weather.
-If a valid
-`data/cell_graph.json` and BMW example-rider folders are present, the same app
-automatically switches to telemetry-backed mode.
-
-Weather windows come from the live Open-Meteo forecast API (no key required)
-and are cached locally. If the service or network is unavailable, the UI falls
-back to clearly marked bundled sample weather so the demo remains usable.
-Each day is evaluated only from three hours before local sunset until one hour
-after. A ride is confirmed when every hourly weather score passes and no hour
-exceeds 30°C.
-
-Scenic routes use major roads to leave Munich efficiently, then ramp in a
-strong motorway/trunk penalty from 20–25 km away from Marienplatz. The roads
-remain available when they are the only practical connection.
-Long, locally straight named roads receive an additional geometry-based cost
-outside the same radius; short connectors and genuinely curving roads do not.
-
-### Full telemetry-backed setup
-
-```bash
-python3 -m venv .venv
-source .venv/bin/activate                 # macOS / Linux
-python -m pip install -r requirements.txt
-python -m pip install duckdb
-
-# 1. Fetch the road network from Overpass (~5 min, cached to fixtures/osm/).
-python -m precompute.fetch_osm
-
-# 2. Split ways at junctions and snap the crowd telemetry onto them (~5 min).
-python -m precompute.build_osm_graph --out data
-
-# 3. Serve the API and UI together on one port.
-python -m uvicorn engine.api:app --port 8000
-```
-
-Open <http://localhost:8000>, then either upload `.csv` files (or a `.zip` of
-them) or click **A** / **B** / **C** to use a bundled example rider.
-
-The dataset is expected at `~/Desktop/BMW/exd_download/datasetHackathon`.
-Override with `BMW_DATASET=/path/to/datasetHackathon`.
-
-## API keys
-
-**None are needed.** The routing graph is built from BMW's own dataset and
-Open-Meteo requires no key. See [`.env.example`](.env.example) — the only
-optional key is live traffic (HERE or TomTom), and the default congestion model
-is derived from the fleet's own observed speeds instead.
-
-## The scenic score, and why it is a function of time
+### The scenic score, and why it depends on the time of day
 
 ```
 scenic(s, t) = static(s) x daylight(t)  +  golden_hour(t) x faces_the_sun(s, t)
@@ -141,21 +180,15 @@ scenic(s, t) = static(s) x daylight(t)  +  golden_hour(t) x faces_the_sun(s, t)
 |---|---|---|
 | curviness | 0.40 | measured lean change per ridden km, blended with road geometry by crowd confidence |
 | road class | 0.25 | a motorway is fast, safe and completely unscenic |
-| elevation | 0.15 | Copernicus DEM not wired yet; currently the trips' own GPS altitude |
-| flow | 0.12 | `1 - share of samples crawling` — the brief's "standstills" red flag |
+| elevation | 0.15 | Copernicus DEM where fetched, otherwise the trips' own GPS altitude |
+| flow | 0.12 | `1 - share of samples crawling`: the brief's "standstills" red flag |
 | 50–120 km/h share | 0.08 | the brief's green-flag speed band |
 | tunnel | ×0.65 | no view inside a tunnel |
 
 The time term is real solar geometry (`engine/sun.py`, NOAA approximation, no
-API and no dependency). Two things move with the clock:
-
-- **Light.** Scenery is worth little after dark, so the whole score is scaled by
-  a daylight factor — 1.0 in daylight, 0.55 at civil twilight, 0.12 at night.
-- **Golden hour, directionally.** Between about −4° and +12° sun elevation, a
-  segment gets a bonus proportional to how squarely it *points at* the low sun,
-  using the segment's mean bearing against the solar azimuth.
-
-Measured on the same request at different departure hours:
+API). Scenery is scaled by daylight (1.0 day, 0.55 civil twilight, 0.12 night),
+and in golden hour a segment gets a bonus for how squarely it points at the low
+sun. Same request, different departure hours:
 
 | Departure | Sun elevation | Phase | Best route scenic |
 |---|---|---|---|
@@ -164,53 +197,118 @@ Measured on the same request at different departure hours:
 | 19:00 | 4.6° | golden hour | **0.429** |
 | 22:00 | −23.5° | night | 0.040 |
 
+### X→Y heatmap (on `/`)
+
+Choose **X → Y heatmap**, click A and B on the map, pick a 30/50/100 km detour
+radius and build. The API is `POST /api/heatmap` (alias `/api/plan/heatmap`)
+with the same telemetry form data as `/api/plan/upload` plus `origin_lat`,
+`origin_lon`, `dest_lat`, `dest_lon`. It samples up to 30 distinct routes,
+scores each for scenic, fun and personal fit, and draws a segment heatmap:
+greener means higher score, thicker means more candidate routes use it.
+Points outside the Bavaria bbox return `422`.
+
+Heatmap routing adds three cost multipliers on travel time, so every edge cost
+stays positive and Dijkstra stays valid:
+
+- **Highways are avoided, not forbidden.** Motorways 5×, motorway links 4×,
+  trunks 3×, trunk links 2.5×, primary 1×, primary links 0.8×.
+- **Long, straight roads are penalised** by the length of the whole road
+  (`road_run_km`), scaled by how *un*-twisty it is. A 14 km alpine pass is
+  untouched; a 14 km straight Bundesstrasse is expensive.
+- **Traffic pressure comes from BMW crowd telemetry** (`crawl_share` and the
+  inverse of `band_share`), blended with a road-class prior where the crowd has
+  no data. It raises cost; it never excludes a road.
+
+The legacy round-trip and point-to-point modes leave these at `0.0`.
+
+### Where the numbers come from
+
+Anything marked **(\*)** in the code is a value we chose ourselves, not from the
+BMW dataset, an API or the brief. The inputs are measured; the scoring is our
+opinion, and every weight lives in one file you can argue with. Full inventory:
+[`plan/PROVENANCE.md`](plan/PROVENANCE.md).
+
+## Tests
+
+```bash
+python3 -m unittest discover -v          # 27 tests, about 35 s
+python3 scripts/benchmark_demo.py        # route timings for riders A/B/C
+python3 scripts/demo_cell_router.py      # morton router end to end (needs data/cell_graph.json)
+```
+
+The FastAPI HTTP test also needs `requirements.txt` plus `httpx`. As of
+2026-11-22, one test fails:
+`test_demo_ratings.test_seeded_variations_are_reproducible_and_diverse`.
+
+The morton encoder has its own correctness gate; run it before trusting any
+precompute output:
+
+```bash
+python -m precompute.morton \
+  "$BMW_DATASET/exampleUserA/recordedTrips/02cbe62f-d6a6-493a-a4e2-980e7536c3bd.csv"
+```
+
 ## Layout
 
 ```
+engine/       demo_server.py   stdlib server for /ride (the quick start)
+              api.py           FastAPI app: /, /cells, /ride and all /api routes
+              ride_data.py     dataset / rider / crowd-graph discovery and provenance
+              rider_profile.py telemetry -> rider profile (cached)
+              profile.py       rider profile: taste / capability / context
+              demo.py          labelled sample riders for the dataset-free mode
+              cell_osm_router.py  /ride planner: OSM roads scored with crowd cells
+              cell_router.py   morton-square router (MORTON_ROUTER.md)
+              router.py        segment router behind / : Dijkstra, both ride modes, heatmap
+              scoring.py       scenic score and the cost function
+              scenic.py        scenic points and stops
+              rideworthy.py    weather windows
+              weather.py       Open-Meteo, cached, labelled fallback offline
+              terrain.py       corners and elevation for the chosen ride
+              replay.py        post-ride summary from recorded telemetry
+              sun.py           solar position, for scenic(t)
+              spatial.py, cache.py, net.py   lookup index, disk caches, HTTPS
 precompute/   morton.py            encoder ported from BMW's tripViewer, verified
                                    against the dataset's own morton_code column
+              build_cell_graph.py  crowd graph -> data/cell_graph.json (stdlib only)
               fetch_osm.py         Overpass, tiled and cached
               build_osm_graph.py   ways -> segments at junctions, crowd snapped on
               build_graph.py       the older crowd-only graph (fallback, no OSM)
-engine/       profile.py     rider profile: taste / capability / context
-              scoring.py     scenic score and the cost function
-              router.py      Dijkstra, junction costs, both ride modes
-              sun.py         solar position, for scenic(t)
-              weather.py     Open-Meteo, cached, degrades to neutral offline
-              api.py         FastAPI + static UI
-web/                         upload, map, routes, KPI panel
-plan/                        design docs
-```
-
-## Verification
-
-```bash
-# Gate 0: the morton encoder must reproduce the dataset's own morton_code.
-# A wrong encoder invalidates the whole precompute, so this runs first.
-python -m precompute.morton \
-  "$HOME/Desktop/BMW/exd_download/datasetHackathon/exampleUserA/recordedTrips/02cbe62f-d6a6-493a-a4e2-980e7536c3bd.csv"
+              fetch_scenic.py      scenic points from Overpass
+              fetch_dem.py         Copernicus DEM raster (optional)
+fixtures/     osm/, scenic/        committed road and scenic extracts
+web/          ride.html, cells.html, index.html + app.js, style.css
+scripts/      benchmark_demo.py, demo_cell_router.py
+tests/        unittest suite
+plan/         design docs
+data/         generated graphs and caches (gitignored)
 ```
 
 ## Known gaps
 
-- **Coverage is one bbox.** 47.60–48.25 N, 11.15–11.80 E — Munich south to
-  Tegernsee. A destination outside it returns a clear error rather than a bad
-  route. Widen it by re-running `fetch_osm` with `--bbox`.
-- **Only 29% of segments carry crowd data.** The rest score from road geometry
-  and class via the confidence blend, which is deliberate graceful degradation —
-  the UI reports the percentage per route.
-- **residential and service roads are excluded** from the Overpass query. They
-  multiply the download several times over and are not where anyone rides for
-  pleasure, but it means a start point on a quiet street snaps to the nearest
-  larger road.
-- **Duration is a target for round trips, a preference for A→B.** Dijkstra
-  returns the best path; it will not detour purely to consume time, so a 19 km
-  A→B request cannot be stretched to two hours. The label reports what was
-  actually achieved rather than what was asked for.
-- **Junction costs use tag-free fallback priors**, not the measured speed-drop
-  delays described in `plan/ALGORITHM.md` §4.
-- **Turn-expanded graph not built yet** — U-turns are blocked by refusing to
-  re-enter the segment just used, which is weaker than a proper turn expansion.
-  One-ways *are* respected.
-- **No DEM, land cover or accident data yet.** Elevation is the trips' own GPS
-  altitude, so the elevation term is weak outside crowd-covered roads.
+- **Coverage is one bbox.** 47.60–48.25 N, 11.15–11.80 E, Munich south to
+  Tegernsee. A destination outside it returns a clear error. Widen it by
+  re-running `fetch_osm` with `--bbox`.
+- **Only part of the network carries crowd data.** The rest scores from road
+  geometry and class through a confidence blend; the UI reports the share per
+  route.
+- **Residential and service roads are excluded** from the Overpass query, so a
+  start on a quiet street snaps to the nearest larger road.
+- **Duration is a target for round trips, a preference for A→B.** Dijkstra will
+  not detour just to use up time; the label reports what was achieved.
+- **Junction costs use fallback priors**, not the measured speed-drop delays in
+  `plan/ALGORITHM.md` §4.
+- **No turn-expanded graph yet.** U-turns are blocked by refusing to re-enter
+  the segment just used. One-ways are respected.
+- **No push notifications.** `/api/ride/windows` returns the payload a
+  notification would carry; it is shown in-app only.
+- Sample riders, scenic weights and the inferred capability ceiling are
+  heuristics, not a trained model and not a safety certification.
+
+## Team
+
+Built by **Krishaanth Ramaraj** ([@krishaanth5831](https://github.com/krishaanth5831)),
+**Nikolay Didiletsov** (Niko) and **Aleksandar Yordanov** (Alex).
+
+Branches: `main` is the demo-safe branch and only takes pull requests; work
+lands on `dev` (and personal feature branches) and goes to `main` by PR.
