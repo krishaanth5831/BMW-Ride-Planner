@@ -174,28 +174,27 @@ extra geometry-based cost outside the same radius.
 scenic(s, t) = static(s) x daylight(t)  +  golden_hour(t) x faces_the_sun(s, t)
 ```
 
-`static(s)` blends, all percentile-scaled against the whole network:
+`static(s)` blends inputs that are each percentile-scaled against the whole
+network. The weights live at the top of `engine/scoring.py` (as of this
+README):
 
 | Input | Weight | Source |
 |---|---|---|
-| curviness | 0.40 | measured lean change per ridden km, blended with road geometry by crowd confidence |
-| road class | 0.25 | a motorway is fast, safe and completely unscenic |
+| curviness | 0.28 | measured lean change per ridden km, blended with road geometry by crowd confidence |
+| road class | 0.22 | a motorway is fast, safe and completely unscenic |
 | elevation | 0.15 | Copernicus DEM where fetched, otherwise the trips' own GPS altitude |
-| flow | 0.12 | `1 - share of samples crawling`: the brief's "standstills" red flag |
-| 50–120 km/h share | 0.08 | the brief's green-flag speed band |
+| relief | 0.15 | local height difference from the DEM |
+| forest | 0.10 | share of forest along the segment |
+| water and viewpoints | 0.10 | closeness to water, blended with nearby viewpoints |
 | tunnel | ×0.65 | no view inside a tunnel |
+
+Flow, gradient and the 50–120 km/h speed band are wired in but currently
+weighted 0.
 
 The time term is real solar geometry (`engine/sun.py`, NOAA approximation, no
 API). Scenery is scaled by daylight (1.0 day, 0.55 civil twilight, 0.12 night),
 and in golden hour a segment gets a bonus for how squarely it points at the low
-sun. Same request, different departure hours:
-
-| Departure | Sun elevation | Phase | Best route scenic |
-|---|---|---|---|
-| 09:00 | 21.1° | day | 0.392 |
-| 13:00 | 45.8° | day | 0.392 |
-| 19:00 | 4.6° | golden hour | **0.429** |
-| 22:00 | −23.5° | night | 0.040 |
+sun, so the same request can score differently at 13:00 and at 19:00.
 
 ### X→Y heatmap (on `/`)
 
@@ -231,14 +230,15 @@ opinion, and every weight lives in one file you can argue with. Full inventory:
 ## Tests
 
 ```bash
-python3 -m unittest discover -v          # 27 tests, about 35 s
+python3 -m unittest discover -v          # 27 tests, under a minute
 python3 scripts/benchmark_demo.py        # route timings for riders A/B/C
 python3 scripts/demo_cell_router.py      # morton router end to end (needs data/cell_graph.json)
 ```
 
-The FastAPI HTTP test also needs `requirements.txt` plus `httpx`. As of
-2026-11-22, one test fails:
-`test_demo_ratings.test_seeded_variations_are_reproducible_and_diverse`.
+The FastAPI HTTP test also needs `requirements.txt` plus `httpx`. All 27 pass
+on a fresh clone. With a locally built `data/cell_graph.json` present (telemetry
+mode), `test_demo_ratings.test_seeded_variations_are_reproducible_and_diverse`
+currently fails, because the tests pick up the local data.
 
 The morton encoder has its own correctness gate; run it before trusting any
 precompute output:
