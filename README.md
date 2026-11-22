@@ -238,7 +238,7 @@ python3 scripts/demo_cell_router.py      # morton router end to end (needs data/
 The FastAPI HTTP test also needs `requirements.txt` plus `httpx`. All 27 pass
 on a fresh clone. With a locally built `data/cell_graph.json` present (telemetry
 mode), `test_demo_ratings.test_seeded_variations_are_reproducible_and_diverse`
-currently fails, because the tests pick up the local data.
+currently fails (the tests appear to pick up the local data and caches).
 
 The morton encoder has its own correctness gate; run it before trusting any
 precompute output:
