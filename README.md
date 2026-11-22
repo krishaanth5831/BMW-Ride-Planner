@@ -10,7 +10,7 @@ along roads that are twisty, scenic and free-flowing, while never sending them
 onto roads the crowd rides harder than they do.
 
 Built in one weekend for the **BMW Motorrad track ("FIND YOUR THRILL — Route
-Challenge") at the TUM.ai hackathon in Zurich**, pitched on 2026-09-13.
+Challenge") at the TUM.ai EHL hackathon in Zurich**, pitched on 2026-09-13.
 It is a hackathon project: it runs and demos well, but it is not maintained
 as a product.
 
@@ -232,7 +232,8 @@ opinion, and every weight lives in one file you can argue with. Full inventory:
 ```bash
 python3 -m unittest discover -v          # 27 tests, under a minute
 python3 scripts/benchmark_demo.py        # route timings for riders A/B/C
-python3 scripts/demo_cell_router.py      # morton router end to end (needs data/cell_graph.json)
+python3 scripts/demo_cell_router.py      # morton router end to end (needs data/cell_graph.json and
+                                         # the dataset unpacked at exd_download/datasetHackathon/ in the repo)
 ```
 
 The FastAPI HTTP test also needs `requirements.txt` plus `httpx`. All 27 pass
